@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Georgia', 'Times New Roman', serif;
+  line-height: 1.6;
+  font-weight: 400;
+  color: #1a365d;
+  background-color: #faf8f5;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+/* Legal document styling */
+.legal-prose {
+  font-family: 'Georgia', 'Times New Roman', serif;
+}
+
+.legal-prose h1,
+.legal-prose h2,
+.legal-prose h3 {
+  font-family: 'Garamond', 'Georgia', serif;
+  font-weight: 600;
+  color: #1a365d;
+}
+
+.legal-prose h1 {
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+  border-bottom: 2px solid #c9a227;
+  padding-bottom: 0.5rem;
+}
+
+.legal-prose h2 {
+  font-size: 1.25rem;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.legal-prose h3 {
+  font-size: 1.1rem;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.legal-prose p {
+  margin-bottom: 0.75rem;
+}
+
+.legal-prose ul,
+.legal-prose ol {
+  margin-left: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.legal-prose li {
+  margin-bottom: 0.25rem;
+}
+
+.legal-prose strong {
+  color: #1a365d;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c9a227;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a88820;
+}
+
+/* Animation for loading */
+@keyframes pulse-gold {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse-gold {
+  animation: pulse-gold 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
