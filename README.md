@@ -186,12 +186,18 @@ themis-framework/
 │   └── packs/             # Practice pack integration tests
 │
 ├── docs/                  # 📚 Technical documentation
-│   ├── DEPLOYMENT_GUIDE.md      # Production deployment (698 lines)
-│   ├── AGENTIC_ENHANCEMENTS.md  # NEW: Complete guide to 2025 agentic features
+│   ├── AGENTIC_ENHANCEMENTS.md  # Complete guide to 2025 agentic features
+│   ├── API_REFERENCE.md         # API endpoint documentation
+│   ├── CODE_REVIEW_REPORT.md    # Comprehensive code review
+│   ├── DEPLOYMENT_GUIDE.md      # Production deployment
 │   ├── DOCKER_README.md         # Docker quick reference
+│   ├── IMPLEMENTATION_SUMMARY.md # Technical implementation details
 │   ├── IMPROVEMENTS.md          # Production features overview
-│   ├── THEMIS_CODE_REVIEW.md    # Original code review
-│   └── IMPLEMENTATION_SUMMARY.md # Technical implementation details
+│   ├── REDEPLOY.md              # Redeployment procedures
+│   ├── REVIEW_FINDINGS.md       # Detailed review findings
+│   ├── SECURITY_IMPROVEMENTS.md # Security enhancements
+│   ├── TEST_RESULTS.md          # Test verification report
+│   └── THEMIS_CODE_REVIEW.md    # Original code review
 │
 ├── .claude/               # 🤖 NEW: Claude Code integration
 │   └── commands/          # Slash command workflow templates
@@ -209,11 +215,8 @@ themis-framework/
 ├── qa/                    # ✅ Quality assurance tests
 │   └── test_smoke.py      # Module import tests
 │
-├── CODE_REVIEW_REPORT.md  # 📋 Comprehensive code review (A- grade)
-├── REVIEW_FINDINGS.md     # 🔍 Detailed review findings
 ├── QUICKSTART.md          # 🚀 Quick start guide
-├── CLAUDE.md              # 🤖 NEW: Agent guide with legal domain knowledge
-├── TEST_RESULTS.md        # ✅ NEW: Comprehensive test verification (26/26 passing)
+├── CLAUDE.md              # 🤖 Agent guide with legal domain knowledge
 ├── README.md              # 📖 This file
 ├── Dockerfile             # 🐳 Production container build
 ├── docker-compose.yml     # 🐳 Full deployment stack
@@ -228,39 +231,49 @@ themis-framework/
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                         User Request                         │
+│                    (Matter Payload)                          │
 └──────────────────────────┬──────────────────────────────────┘
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                  Orchestrator (Planning)                     │
-│  • Creates execution plan with phases                        │
-│  • Determines agent routing based on intent                  │
+│  • Builds task graph (DAG) with 6 phases                     │
+│  • Routes to primary agent per phase based on intent         │
+│  • Assigns supporting agents for cross-validation            │
 └──────────────────────────┬──────────────────────────────────┘
                            │
-          ┌────────────────┼────────────────┐
-          │                │                │
-          ▼                ▼                ▼
-    ┌─────────┐      ┌─────────┐      ┌─────────┐      ┌─────────┐
-    │   LDA   │      │   DEA   │      │   LSA   │      │   DDA   │
-    │  Facts  │ ───> │   Law   │ ───> │Strategy │ ───> │Document │
-    │Timeline │      │Citations│      │  Risk   │      │Drafting │
-    └─────────┘      └─────────┘      └─────────┘      └─────────┘
-          │                │                │                │
-          └────────────────┴────────────────┴────────────────┘
-                                    │
-                                    ▼
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     Phase Execution                          │
+│                                                              │
+│  ┌──────────────────┐    ┌──────────────────┐               │
+│  │ 1. INTAKE_FACTS  │───>│ 2. ISSUE_FRAMING │               │
+│  │    (LDA)         │    │    (DEA/LDA)     │               │
+│  └──────────────────┘    └────────┬─────────┘               │
+│                                   │                          │
+│  ┌──────────────────┐    ┌───────▼──────────┐               │
+│  │ 4. APPLICATION   │<───│ 3. RESEARCH      │               │
+│  │    (DEA/LDA)     │    │    (DEA)         │               │
+│  └────────┬─────────┘    └──────────────────┘               │
+│           │                                                  │
+│  ┌────────▼─────────┐    ┌──────────────────┐               │
+│  │ 5. DRAFT_REVIEW  │───>│ 6. DOC_ASSEMBLY  │               │
+│  │    (LSA)         │    │    (DDA)         │               │
+│  └──────────────────┘    └──────────────────┘               │
+│                                                              │
+│  Each phase: Primary agent + Supporting agents               │
+│  Signal propagation between phases                           │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+                           ▼
            ┌────────────────────────────────────────────────────┐
-           │         Orchestrator (Reflection)                   │
-           │  • Validates signal propagation                     │
-           │  • Checks consistency across agents                 │
-           │  • Verifies exit conditions met                     │
-           │  • Ensures all legal issues have been addressed     │
-           │  • Validates legal writing is crisp and uses modern │
-           │    legal prose                                      │
-           └─────┬──────────────────────────────────────────┬────┘
-                 │                                          │
-                 │  Quality checks passed                   └─ Quality checks failed → Re-plan and re-execute
-                 ▼
+           │              Exit Condition Checks                  │
+           │  • Validates required signals present               │
+           │  • Marks steps as attention_required if missing     │
+           │  • Aggregates artifacts from all phases             │
+           └──────────────────────────┬─────────────────────────┘
+                                      │
+                                      ▼
 ┌─────────────────────────────────────────┐
 │     Human Review-Ready Artifacts        │
 │  • Timeline spreadsheet                 │
@@ -271,6 +284,16 @@ themis-framework/
 │    motions, memos)                      │
 └─────────────────────────────────────────┘
 ```
+
+**Agent Routing by Phase:**
+| Phase | Default Agent | Alternative (by intent) |
+|-------|---------------|------------------------|
+| INTAKE_FACTS | LDA | - |
+| ISSUE_FRAMING | DEA | LDA (damages/timeline) |
+| RESEARCH_RETRIEVAL | DEA | - |
+| APPLICATION_ANALYSIS | DEA | LDA (damages/valuation) |
+| DRAFT_REVIEW | LSA | - |
+| DOCUMENT_ASSEMBLY | DDA | - |
 
 ### State Management & Persistence
 Themis implements a hybrid state management strategy for optimal performance:
@@ -878,15 +901,14 @@ Documentation
 | `README.md` | Main project overview (this file) |
 | `QUICKSTART.md` | Quick start guide for new users |
 | `CLAUDE.md` | Agent guide with legal domain knowledge |
-| `TEST_RESULTS.md` | Comprehensive test verification report |
 | `docs/AGENTIC_ENHANCEMENTS.md` | Complete guide to 2025 agentic features |
 | `docs/API_REFERENCE.md` | Complete API endpoint documentation |
+| `docs/CODE_REVIEW_REPORT.md` | Comprehensive code review |
 | `docs/DEPLOYMENT_GUIDE.md` | Production deployment instructions |
 | `docs/DOCKER_README.md` | Docker setup and configuration |
 | `docs/IMPROVEMENTS.md` | Production features and enhancements |
 | `docs/IMPLEMENTATION_SUMMARY.md` | Technical implementation details |
-| `CODE_REVIEW_REPORT.md` | Comprehensive code review |
-| `REVIEW_FINDINGS.md` | Detailed review findings |
+| `docs/TEST_RESULTS.md` | Test verification report |
 | `.claude/commands/*.md` | Slash command workflow templates (6 commands) |
 
 Contributing
