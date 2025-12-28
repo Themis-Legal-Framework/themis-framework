@@ -65,7 +65,23 @@ def api_client(stub_service: StubOrchestratorService) -> TestClient:
 def test_health_endpoint(api_client: TestClient) -> None:
     response = api_client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    assert response.json() == {"status": "healthy"}
+
+
+def test_liveness_probe(api_client: TestClient) -> None:
+    response = api_client.get("/health/live")
+    assert response.status_code == 200
+    assert response.json() == {"status": "alive"}
+
+
+def test_readiness_probe(api_client: TestClient) -> None:
+    response = api_client.get("/health/ready")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ready"
+    assert "uptime_seconds" in data
+    assert "checks" in data
+    assert data["checks"]["orchestrator"] is True
 
 
 def test_metrics_endpoint_returns_prometheus_payload(api_client: TestClient) -> None:

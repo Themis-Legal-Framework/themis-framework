@@ -1,8 +1,10 @@
-"""Middleware for request logging, auditing, and monitoring."""
+"""Middleware for request logging, auditing, monitoring, and security."""
 
 from __future__ import annotations
 
+import os
 import time
+import uuid
 from collections.abc import Callable
 
 from fastapi import HTTPException, Request, Response, status
@@ -14,6 +16,7 @@ from api.logging_config import (
     get_performance_logger,
     get_request_logger,
 )
+from tools.metrics import metrics_registry
 
 request_logger = get_request_logger()
 audit_logger = get_audit_logger()
@@ -22,18 +25,32 @@ performance_logger = get_performance_logger()
 # Maximum request body size (10MB by default)
 MAX_REQUEST_SIZE = 10 * 1024 * 1024  # 10MB in bytes
 
+# Initialize metrics
+request_latency = metrics_registry.histogram(
+    "themis_http_request_duration_seconds",
+    "HTTP request latency in seconds",
+    buckets=[0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0],
+)
+request_total = metrics_registry.counter(
+    "themis_http_requests_total",
+    "Total HTTP requests",
+)
+request_errors = metrics_registry.counter(
+    "themis_http_request_errors_total",
+    "Total HTTP request errors",
+)
+
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
-    """Middleware to log all HTTP requests and responses."""
-
-    def __init__(self, app: ASGIApp):
-        super().__init__(app)
-        self.request_count = 0
+    """Middleware to log all HTTP requests and responses with tracing."""
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        """Log request and response details."""
-        self.request_count += 1
-        request_id = f"req-{self.request_count}"
+        """Log request and response details with correlation ID."""
+        # Use incoming X-Request-ID or generate a new UUID for tracing
+        request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+
+        # Store request_id in request state for downstream access
+        request.state.request_id = request_id
 
         # Extract request info
         method = request.method
@@ -52,10 +69,18 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
 
         # Calculate duration
-        duration_ms = (time.time() - start_time) * 1000
+        duration_seconds = time.time() - start_time
+        duration_ms = duration_seconds * 1000
+
+        # Record metrics
+        status_code = response.status_code
+        request_latency.observe(duration_seconds, method=method, path=path, status=str(status_code))
+        request_total.inc(method=method, path=path, status=str(status_code))
+
+        if status_code >= 400:
+            request_errors.inc(method=method, path=path, status=str(status_code))
 
         # Log response
-        status_code = response.status_code
         level = "info" if status_code < 400 else "error" if status_code < 500 else "critical"
 
         log_message = (
@@ -69,10 +94,10 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         if duration_ms > 1000:  # Requests > 1 second
             performance_logger.warning(
                 f"Slow request: {method} {path} | "
-                f"duration={duration_ms:.2f}ms | client={client_ip}"
+                f"duration={duration_ms:.2f}ms | client={client_ip} | request_id={request_id}"
             )
 
-        # Add custom headers
+        # Add tracing and timing headers
         response.headers["X-Request-ID"] = request_id
         response.headers["X-Response-Time-Ms"] = f"{duration_ms:.2f}"
 
@@ -195,3 +220,55 @@ class PayloadSizeLimitMiddleware(BaseHTTPMiddleware):
 
         # Process request
         return await call_next(request)
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Middleware to add security headers to all responses."""
+
+    # Security headers for production hardening
+    SECURITY_HEADERS = {
+        # Prevent MIME type sniffing
+        "X-Content-Type-Options": "nosniff",
+        # Prevent clickjacking
+        "X-Frame-Options": "DENY",
+        # Enable XSS protection (legacy browsers)
+        "X-XSS-Protection": "1; mode=block",
+        # Control referrer information
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        # Restrict permissions/features
+        "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
+        # Cache control for API responses
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+        "Pragma": "no-cache",
+    }
+
+    def __init__(self, app: ASGIApp, enable_hsts: bool | None = None):
+        super().__init__(app)
+        # Enable HSTS only in production (when explicitly enabled or PRODUCTION_MODE is set)
+        self.enable_hsts = enable_hsts if enable_hsts is not None else (
+            os.getenv("PRODUCTION_MODE", "").lower() == "true"
+        )
+
+    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        """Add security headers to response."""
+        response = await call_next(request)
+
+        # Add all security headers
+        for header, value in self.SECURITY_HEADERS.items():
+            response.headers[header] = value
+
+        # Add HSTS header only in production (requires HTTPS)
+        if self.enable_hsts:
+            # max-age=31536000 (1 year), includeSubDomains
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=31536000; includeSubDomains"
+            )
+
+        # Content Security Policy for API (restrictive)
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'none'; "
+            "frame-ancestors 'none'; "
+            "form-action 'none'"
+        )
+
+        return response
