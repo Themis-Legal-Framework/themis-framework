@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
+from collections.abc import AsyncGenerator
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, ValidationError
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -245,3 +248,94 @@ async def get_artifacts(
         return await service.get_artifacts(plan_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+async def _stream_execution_events(
+    service: OrchestratorService,
+    plan_id: str | None,
+    matter: dict[str, Any] | None,
+) -> AsyncGenerator[str, None]:
+    """Generate Server-Sent Events for execution progress.
+
+    Yields SSE-formatted events as execution progresses through agents.
+    """
+    try:
+        # Emit start event
+        yield f"event: start\ndata: {json.dumps({'status': 'started', 'plan_id': plan_id})}\n\n"
+
+        # Use the streaming execution method
+        async for event in service.execute_stream(plan_id=plan_id, matter=matter):
+            stage = event.get("stage", "progress")
+
+            # Map internal stages to SSE event types
+            if stage == "agent_started":
+                yield f"event: agent_started\ndata: {json.dumps(event)}\n\n"
+            elif stage == "agent_completed":
+                yield f"event: agent_completed\ndata: {json.dumps(event)}\n\n"
+            elif stage == "agent_failed":
+                yield f"event: agent_failed\ndata: {json.dumps(event)}\n\n"
+            elif stage == "execution_complete":
+                yield f"event: complete\ndata: {json.dumps(event)}\n\n"
+            else:
+                yield f"event: progress\ndata: {json.dumps(event)}\n\n"
+
+    except ValueError as exc:
+        yield f"event: error\ndata: {json.dumps({'error': str(exc), 'code': 404})}\n\n"
+    except Exception as exc:
+        logger.exception(f"Streaming execution error: {exc}")
+        yield f"event: error\ndata: {json.dumps({'error': 'Internal server error', 'code': 500})}\n\n"
+
+
+@router.post("/execute/stream", summary="Stream execution progress via SSE")
+@limiter.limit("10/minute")
+async def execute_stream(
+    request: Request,
+    api_key: str = Depends(verify_api_key),
+) -> StreamingResponse:
+    """Stream execution progress using Server-Sent Events (SSE).
+
+    Returns a streaming response with real-time progress updates as the
+    orchestrator processes the matter through registered agents.
+
+    Events:
+    - `start`: Execution has begun
+    - `progress`: Agent processing update
+    - `agent_complete`: An agent has finished processing
+    - `complete`: Full execution result
+    - `error`: An error occurred
+
+    Requires authentication via Bearer token if THEMIS_API_KEY is set.
+    Rate limited to 10 requests per minute per IP address.
+    """
+    try:
+        payload = await request.json()
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid JSON payload provided.",
+        ) from exc
+
+    execute_request = ExecuteRequest.model_validate(payload)
+
+    if execute_request.plan_id is None and execute_request.matter is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide either an existing plan_id or a matter payload to execute.",
+        )
+
+    service = get_service()
+
+    # Validate matter if provided
+    validated_matter = None
+    if execute_request.matter is not None:
+        validated_matter = validate_and_extract_matter(execute_request.matter)
+
+    return StreamingResponse(
+        _stream_execution_events(service, execute_request.plan_id, validated_matter),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+        },
+    )

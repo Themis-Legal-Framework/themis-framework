@@ -7,6 +7,9 @@ from api.main import app
 from orchestrator import router
 
 
+from collections.abc import AsyncGenerator
+
+
 class StubOrchestratorService:
     def __init__(self) -> None:
         self.plans: dict[str, dict[str, object]] = {}
@@ -35,6 +38,30 @@ class StubOrchestratorService:
         }
         self.artifacts[chosen_plan_id] = result["artifacts"]
         return result
+
+    async def execute_stream(
+        self, *, plan_id: str | None = None, matter: dict[str, object] | None = None
+    ) -> AsyncGenerator[dict[str, object], None]:
+        """Stream execution progress events."""
+        self.execute_invocations.append({"plan_id": plan_id, "matter": matter})
+        if plan_id and plan_id not in self.plans:
+            raise ValueError("Plan not found")
+        chosen_plan_id = plan_id or f"plan-{len(self.plans) + 1}"
+
+        # Yield progress events
+        yield {"stage": "plan_created", "plan_id": chosen_plan_id}
+        yield {"stage": "agent_started", "agent": "lda", "step": 1, "total_steps": 2}
+        yield {"stage": "agent_completed", "agent": "lda", "step": 1, "total_steps": 2}
+        yield {"stage": "agent_started", "agent": "dda", "step": 2, "total_steps": 2}
+        yield {"stage": "agent_completed", "agent": "dda", "step": 2, "total_steps": 2}
+        yield {
+            "stage": "execution_complete",
+            "status": "complete",
+            "plan_id": chosen_plan_id,
+            "artifacts_count": 2,
+        }
+
+        self.artifacts[chosen_plan_id] = {"documents": []}
 
     async def get_plan(self, plan_id: str) -> dict[str, object]:
         if plan_id not in self.plans:
@@ -146,3 +173,77 @@ def test_execute_endpoint_returns_results(api_client: TestClient, stub_service: 
 def test_get_plan_handles_missing_plan(api_client: TestClient) -> None:
     response = api_client.get("/orchestrator/plans/unknown")
     assert response.status_code == 404
+
+
+def test_execute_stream_returns_sse_events(api_client: TestClient, stub_service: StubOrchestratorService) -> None:
+    """Test that streaming endpoint returns SSE-formatted events."""
+    # First create a plan
+    plan_payload = {
+        "matter": {
+            "summary": "Streaming test matter",
+            "parties": ["Alice", "Bob"],
+            "documents": [
+                {
+                    "title": "Complaint",
+                    "summary": "Complaint summary",
+                    "date": "2024-01-01",
+                }
+            ],
+        }
+    }
+    plan_response = api_client.post("/orchestrator/plan", json=plan_payload)
+    plan_id = plan_response.json()["plan_id"]
+
+    # Execute with streaming
+    with api_client.stream(
+        "POST",
+        "/orchestrator/execute/stream",
+        json={"plan_id": plan_id}
+    ) as response:
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
+
+        # Collect all events
+        events = []
+        for line in response.iter_lines():
+            if line.startswith("event:"):
+                events.append(line.split(":", 1)[1].strip())
+
+        # Verify we got the expected event types
+        assert "start" in events
+        assert "agent_started" in events
+        assert "agent_completed" in events
+        assert "complete" in events
+
+
+def test_execute_stream_requires_payload(api_client: TestClient) -> None:
+    """Test that streaming endpoint requires plan_id or matter."""
+    response = api_client.post("/orchestrator/execute/stream", json={})
+    assert response.status_code == 400
+
+
+def test_execute_stream_with_matter_payload(api_client: TestClient, stub_service: StubOrchestratorService) -> None:
+    """Test streaming with inline matter payload (no prior plan)."""
+    payload = {
+        "matter": {
+            "summary": "Direct streaming matter",
+            "parties": ["Client", "Defendant"],
+            "documents": [
+                {
+                    "title": "Contract",
+                    "summary": "Contract summary",
+                    "date": "2024-01-15",
+                }
+            ],
+        }
+    }
+
+    with api_client.stream(
+        "POST",
+        "/orchestrator/execute/stream",
+        json=payload
+    ) as response:
+        assert response.status_code == 200
+        content = response.read().decode()
+        assert "event: start" in content
+        assert "event: complete" in content

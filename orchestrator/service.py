@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import AsyncGenerator, Callable
 from copy import deepcopy
 from typing import Any
 from uuid import uuid4
@@ -425,6 +425,217 @@ class OrchestratorService:
         self._save_state()
 
         return execution_record
+
+    async def execute_stream(
+        self,
+        matter: dict[str, Any] | None = None,
+        plan_id: str | None = None,
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """Execute a plan with streaming progress updates.
+
+        Yields progress events as each agent processes, enabling real-time
+        UI updates via Server-Sent Events.
+
+        Args:
+            matter: Optional matter payload (required if no plan_id).
+            plan_id: Optional plan ID to execute.
+
+        Yields:
+            Progress event dictionaries with stage, agent, status, etc.
+
+        Raises:
+            ValidationError: If parameters are invalid.
+            PlanNotFoundError: If the specified plan does not exist.
+        """
+        # Validate inputs
+        validated_matter, validated_plan_id = validate_execute_params(matter, plan_id)
+
+        self.state = self._load_state()
+        if validated_plan_id is not None:
+            plan = self.state.recall_plan(validated_plan_id)
+            if plan is None:
+                raise PlanNotFoundError(validated_plan_id)
+            if validated_matter is not None:
+                plan["matter"] = validated_matter
+                self.state.remember_plan(validated_plan_id, deepcopy(plan))
+                self._save_state()
+            plan_id = validated_plan_id
+        else:
+            plan = await self.plan(validated_matter)
+            plan_id = plan["plan_id"]
+
+        yield {"stage": "plan_created", "plan_id": plan_id}
+
+        plan_matter = deepcopy(plan.get("matter", {}))
+        steps_results: list[dict[str, Any]] = []
+        artifacts: dict[str, Any] = {}
+        propagated: dict[str, Any] = {}
+        overall_status = "complete"
+        needs_attention = False
+        tracer = self._tracer_factory()
+
+        graph_payload = plan.get("graph")
+        if graph_payload:
+            graph = TaskGraph.from_dict(graph_payload)
+        else:
+            graph = TaskGraph.from_linear_steps(plan.get("steps", []))
+
+        plan_steps_map = {step["id"]: step for step in plan.get("steps", [])}
+        if not plan_steps_map:
+            plan["steps"] = graph.to_linear_steps()
+            plan_steps_map = {step["id"]: step for step in plan["steps"]}
+
+        total_steps = len(list(graph.topological_order()))
+        current_step = 0
+
+        for node in graph.topological_order():
+            current_step += 1
+            step = plan_steps_map.get(node.id, node.as_dict())
+            agent_name = step["agent"]
+            agent = self.agents.get(agent_name)
+
+            yield {
+                "stage": "agent_started",
+                "agent": agent_name,
+                "step": current_step,
+                "total_steps": total_steps,
+                "phase": step.get("phase"),
+            }
+
+            step_result: dict[str, Any] = {
+                "id": step["id"],
+                "agent": agent_name,
+                "dependencies": step.get("dependencies", []),
+                "expected_artifacts": step.get("expected_artifacts", []),
+                "phase": step.get("phase"),
+            }
+
+            if agent is None:
+                step_result["status"] = "failed"
+                step_result["error"] = f"Agent '{agent_name}' is not registered"
+                overall_status = "failed"
+                yield {
+                    "stage": "agent_failed",
+                    "agent": agent_name,
+                    "error": step_result["error"],
+                }
+                steps_results.append(step_result)
+                continue
+
+            tracer.record(
+                "phase_start",
+                node_id=step_result["id"],
+                agent=agent_name,
+                phase=step.get("phase"),
+            )
+            if hasattr(agent, "attach_tracer"):
+                agent.attach_tracer(tracer, step_result["id"])
+
+            try:
+                agent_input = deepcopy(plan_matter)
+                agent_input.update(propagated)
+                resolved_connectors = self.connectors.resolve(
+                    step.get("required_connectors", [])
+                )
+                if resolved_connectors:
+                    agent_input.setdefault("connectors", {}).update(resolved_connectors)
+
+                # Auto-detect document type before DDA runs
+                if (
+                    agent_name == "dda"
+                    and "document_type" not in agent_input
+                    and "document_type" not in agent_input.get("metadata", {})
+                ):
+                    detected_type = await determine_document_type(agent_input)
+                    agent_input["document_type"] = detected_type
+                    agent_input.setdefault("metadata", {})["document_type"] = detected_type
+
+                # Execute agent with retry policy
+                retry_result: RetryResult = await retry_async(
+                    lambda: agent.run(agent_input),
+                    self.retry_policy,
+                    operation_name=f"agent:{agent_name}",
+                )
+
+                if not retry_result.success:
+                    raise retry_result.last_exception or Exception("Agent execution failed")
+
+                output = retry_result.result
+                if retry_result.attempts > 1:
+                    step_result["retry_attempts"] = retry_result.attempts
+
+            except Exception as exc:
+                step_result["status"] = "failed"
+                step_result["error"] = str(exc)
+                overall_status = "failed"
+                yield {
+                    "stage": "agent_failed",
+                    "agent": agent_name,
+                    "error": str(exc),
+                }
+            else:
+                step_result["status"] = "complete"
+                step_result["output"] = output
+                artifacts[agent_name] = output
+                propagated[agent_name] = output
+
+                produced_artifacts = _collect_expected_artifacts(
+                    output, step.get("expected_artifacts", [])
+                )
+                if produced_artifacts:
+                    propagated.update(produced_artifacts)
+                    plan_matter.update(produced_artifacts)
+                    step_result["artifacts"] = produced_artifacts
+
+                yield {
+                    "stage": "agent_completed",
+                    "agent": agent_name,
+                    "step": current_step,
+                    "total_steps": total_steps,
+                }
+
+            finally:
+                tracer.record(
+                    "phase_complete",
+                    node_id=step_result["id"],
+                    agent=agent_name,
+                    status=step_result.get("status"),
+                )
+
+            if step_result.get("status") == "complete":
+                missing_signals = self.policy.evaluate_exit_conditions(
+                    step, {**plan_matter, **propagated}
+                )
+                if missing_signals:
+                    step_result["status"] = "attention_required"
+                    step_result["missing_signals"] = missing_signals
+                    needs_attention = True
+
+            steps_results.append(step_result)
+
+        execution_record = {
+            "plan_id": plan_id,
+            "status": overall_status,
+            "steps": steps_results,
+            "artifacts": artifacts,
+            "trace": tracer.flush(),
+        }
+
+        if overall_status != "failed":
+            overall_status = "attention_required" if needs_attention else "complete"
+            execution_record["status"] = overall_status
+
+        plan["status"] = overall_status
+        self.state.remember_plan(plan_id, deepcopy(plan))
+        self.state.remember_execution(plan_id, deepcopy(execution_record))
+        self._save_state()
+
+        yield {
+            "stage": "execution_complete",
+            "status": overall_status,
+            "plan_id": plan_id,
+            "artifacts_count": len(artifacts),
+        }
 
     async def get_plan(self, plan_id: str) -> dict[str, Any]:
         """Retrieve a persisted plan by identifier.

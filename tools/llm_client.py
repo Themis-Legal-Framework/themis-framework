@@ -19,6 +19,7 @@ import asyncio
 import json
 import logging
 import os
+from collections.abc import AsyncIterator
 from typing import Any
 
 from anthropic import Anthropic
@@ -206,6 +207,60 @@ class LLMClient:
             return {"response": content}
         except json.JSONDecodeError:
             return {"response": content}
+
+    async def generate_text_stream(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        max_tokens: int = 4096,
+    ) -> AsyncIterator[str]:
+        """Stream text response from the LLM token by token.
+
+        Yields text chunks as they're generated, enabling real-time UI updates.
+        Uses Server-Sent Events (SSE) compatible output.
+
+        Args:
+            system_prompt: System prompt for the model.
+            user_prompt: User prompt for the model.
+            max_tokens: Maximum tokens to generate.
+
+        Yields:
+            Text chunks as they're generated.
+        """
+        if self._stub_mode:
+            # Stub mode: yield the full response in chunks to simulate streaming
+            full_response = self._stub_handler.generate_text(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                max_tokens=max_tokens,
+            )
+            # Simulate streaming by yielding word by word
+            words = full_response.split()
+            for i, word in enumerate(words):
+                yield word + (" " if i < len(words) - 1 else "")
+                await asyncio.sleep(0.01)  # Small delay to simulate streaming
+            return
+
+        logger.debug(
+            f"Starting streaming response (model: {self.model}, max_tokens: {max_tokens})"
+        )
+
+        messages = [{"role": "user", "content": user_prompt}]
+
+        # Build request parameters for streaming
+        request_params: dict[str, Any] = {
+            "model": self.model,
+            "max_tokens": max_tokens,
+            "messages": messages,
+            "system": system_prompt,
+        }
+
+        # Use the streaming API
+        with self.client.messages.stream(**request_params) as stream:
+            for text in stream.text_stream:
+                yield text
+
+        logger.debug("Streaming response completed")
 
     async def generate_text(
         self,
