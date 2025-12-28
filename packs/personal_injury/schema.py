@@ -169,10 +169,7 @@ def _coerce_float(value: Any) -> float:
 def load_matter(data: dict[str, Any]) -> PersonalInjuryMatter:
     """Load a matter dictionary into the shared schema dataclasses."""
 
-    if "matter" in data:
-        envelope = data["matter"]
-    else:
-        envelope = data
+    envelope = data.get("matter", data)
 
     metadata_raw = envelope.get("metadata", {})
 

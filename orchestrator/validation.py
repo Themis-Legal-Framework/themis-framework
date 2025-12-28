@@ -77,7 +77,7 @@ def validate_matter(matter: dict[str, Any] | None, require_documents: bool = Tru
             raise ValidationError(
                 f"Invalid matter: {message}",
                 field=field_path,
-                details={"pydantic_errors": [err for err in errors[:5]]},  # Limit errors
+                details={"pydantic_errors": list(errors[:5])},  # Limit errors
             ) from e
         raise ValidationError("Invalid matter payload") from e
 

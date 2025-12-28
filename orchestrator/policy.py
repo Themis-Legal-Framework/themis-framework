@@ -209,9 +209,8 @@ class RoutingPolicy:
         keys_to_check = [signal]
         keys_to_check.extend(self._signal_aliases.get(signal, []))
         for candidate in keys_to_check:
-            if "." in candidate:
-                if self._path_exists(aggregated, candidate.split(".")):
-                    return True
+            if "." in candidate and self._path_exists(aggregated, candidate.split(".")):
+                return True
             if candidate in aggregated and self._is_truthy(aggregated[candidate]):
                 return True
             if self._scan_nested(candidate, aggregated):

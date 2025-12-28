@@ -143,8 +143,10 @@ class StubLLMHandler:
         prompt_lower = user_prompt.lower()
 
         # If document-related keywords, call document_parser if available
-        if any(kw in prompt_lower for kw in ["document", "parse", "extract", "text"]):
-            if "document_parser" in tool_functions:
+        if (
+            any(kw in prompt_lower for kw in ["document", "parse", "extract", "text"])
+            and "document_parser" in tool_functions
+        ):
                 logger.info("Stub: Calling document_parser")
                 try:
                     parsed = tool_functions["document_parser"](matter)
@@ -162,8 +164,10 @@ class StubLLMHandler:
                 result_text += f"Parsed documents and extracted {key_facts_count} key facts.\n\n"
 
         # If timeline keywords, call timeline_builder if available
-        if any(kw in prompt_lower for kw in ["timeline", "chronolog", "sequence", "events"]):
-            if "timeline_builder" in tool_functions:
+        if (
+            any(kw in prompt_lower for kw in ["timeline", "chronolog", "sequence", "events"])
+            and "timeline_builder" in tool_functions
+        ):
                 logger.info("Stub: Calling timeline_builder")
                 try:
                     timeline = tool_functions["timeline_builder"](matter, None)
@@ -176,8 +180,10 @@ class StubLLMHandler:
                 result_text += f"Built timeline with {len(timeline)} events.\n\n"
 
         # If damages/calculation keywords, call damages_calculator if available
-        if any(kw in prompt_lower for kw in ["damage", "calculat", "expense", "loss", "wage"]):
-            if "damages_calculator" in tool_functions:
+        if (
+            any(kw in prompt_lower for kw in ["damage", "calculat", "expense", "loss", "wage"])
+            and "damages_calculator" in tool_functions
+        ):
                 logger.info("Stub: Calling damages_calculator")
                 try:
                     damages = tool_functions["damages_calculator"]({"economic_losses": {}, "non_economic_factors": {}})
@@ -259,22 +265,23 @@ class StubLLMHandler:
                 try:
                     # Extract facts from matter - could be at top level or nested under agent outputs
                     facts = matter.get("facts", {})
-                    if not facts or not facts.get("fact_pattern_summary"):
-                        # Try to find facts from LDA output
-                        if "lda" in matter and isinstance(matter["lda"], dict):
-                            facts = matter["lda"].get("facts", {})
+                    # Try to find facts from LDA output if not found at top level
+                    if (
+                        (not facts or not facts.get("fact_pattern_summary"))
+                        and "lda" in matter
+                        and isinstance(matter["lda"], dict)
+                    ):
+                        facts = matter["lda"].get("facts", {})
 
                     # Extract legal analysis - could be from DEA
                     legal_analysis = matter.get("legal_analysis", {})
-                    if not legal_analysis:
-                        if "dea" in matter and isinstance(matter["dea"], dict):
-                            legal_analysis = matter["dea"].get("legal_analysis", {})
+                    if not legal_analysis and "dea" in matter and isinstance(matter["dea"], dict):
+                        legal_analysis = matter["dea"].get("legal_analysis", {})
 
                     # Extract strategy - could be from LSA
                     strategy = matter.get("strategy", {})
-                    if not strategy:
-                        if "lsa" in matter and isinstance(matter["lsa"], dict):
-                            strategy = matter["lsa"].get("strategy", {})
+                    if not strategy and "lsa" in matter and isinstance(matter["lsa"], dict):
+                        strategy = matter["lsa"].get("strategy", {})
 
                     logger.info(f"Stub section_generator: facts={len(facts.get('fact_pattern_summary', []))} items, "
                               f"issues={len(legal_analysis.get('issues', []))}, "
@@ -844,7 +851,7 @@ CONCLUSION
                 continue
             if not stripped:
                 break
-            if stripped.startswith("-") or stripped.startswith("•"):
+            if stripped.startswith(("-", "•")):
                 bullet = stripped.lstrip("-• ").strip()
                 if bullet:
                     bullets.append(bullet)

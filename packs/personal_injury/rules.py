@@ -71,9 +71,7 @@ SEED_PROFILES: dict[str, JurisdictionProfile] = {
 }
 
 
-_PROFILE_CACHE: dict[str, JurisdictionProfile] = {
-    key: profile for key, profile in SEED_PROFILES.items()
-}
+_PROFILE_CACHE: dict[str, JurisdictionProfile] = dict(SEED_PROFILES)
 
 
 PLEADING_ELEMENTS: dict[str, dict[str, list[str]]] = {
