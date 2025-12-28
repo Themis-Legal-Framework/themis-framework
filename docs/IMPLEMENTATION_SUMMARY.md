@@ -98,7 +98,7 @@ Your Themis legal agent system has been upgraded from a **template-based prototy
 │  └──────────────────────────────────────────────┘         │
 │       ↓                                                     │
 │  ┌──────────────────────────────────────────────┐         │
-│  │     Anthropic API (claude-3-5-sonnet)        │         │
+│  │     Anthropic API (Claude Opus 4.5)          │         │
 │  └──────────────────────────────────────────────┘         │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -129,7 +129,7 @@ Your Themis legal agent system has been upgraded from a **template-based prototy
 
 ### 1. LLM Integration
 
-- ✅ Anthropic Claude 3.5 Sonnet integration
+- ✅ Anthropic Claude Opus 4.5 integration
 - ✅ Structured JSON response parsing
 - ✅ System prompts defining agent roles
 - ✅ Context-aware user prompts
@@ -206,7 +206,7 @@ class LLMClient:
 - JSON schema validation in prompts
 - Automatic JSON extraction from responses
 - Token limit management (10K char truncation)
-- Model configurability (defaulting to Claude 3.5 Sonnet)
+- Model configurability (defaulting to Claude Opus 4.5)
 
 ### Document Parser Design
 
@@ -349,7 +349,7 @@ curl -X POST http://localhost:8000/orchestrator/plan \
 
 ### Cost
 
-Approximate costs per run (Claude 3.5 Sonnet pricing):
+Approximate costs per run (Claude Opus 4.5 pricing):
 
 - Input tokens: ~$3 per million tokens
 - Output tokens: ~$15 per million tokens

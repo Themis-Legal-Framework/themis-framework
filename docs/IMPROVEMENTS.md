@@ -211,9 +211,9 @@ async def _call_anthropic_api(...):
 
 Debug logs show retry attempts:
 ```
-DEBUG: Calling Anthropic API (model: claude-3-5-sonnet-20241022, max_tokens: 4096)
+DEBUG: Calling Anthropic API (model: claude-opus-4-5-20251101, max_tokens: 4096)
 WARNING: Retry attempt 1 failed, waiting 2 seconds
-DEBUG: Calling Anthropic API (model: claude-3-5-sonnet-20241022, max_tokens: 4096)
+DEBUG: Calling Anthropic API (model: claude-opus-4-5-20251101, max_tokens: 4096)
 DEBUG: Received response from Anthropic API (1234 chars)
 ```
 

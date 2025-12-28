@@ -102,7 +102,7 @@ See `docs/AGENTIC_ENHANCEMENTS.md` for complete guide and `TEST_RESULTS.md` for 
 - ✅ Circuit Breaker – Prevents cascading failures with configurable thresholds and automatic recovery
 
 ### Intelligent Agent System
-- 🤖 LLM-Powered Agents – Claude 3.5 Sonnet integration with structured outputs and extended thinking
+- 🤖 LLM-Powered Agents – Claude Opus 4.5 integration with structured outputs and extended thinking
 - 🔄 Automatic Retry Logic – Configurable retry policies with exponential backoff, jitter, and re-execution support
 - 🎯 Smart Routing – Phase-based orchestration with signal propagation and task graphs
 - 📝 Stub Mode – Run without API keys using heuristic fallback generation for testing and development

@@ -456,8 +456,8 @@ USE_EXTENDED_THINKING=true        # Extended thinking mode
 USE_PROMPT_CACHING=true            # 1-hour prompt caching
 ENABLE_CODE_EXECUTION=false        # Code execution tool
 
-# Model selection
-MODEL=claude-3-5-sonnet-20241022   # Claude model version
+# Model selection (defaults to Claude Opus 4.5)
+# MODEL=claude-opus-4-5-20251101
 
 # MCP integration
 LEGAL_RESEARCH_MCP_URL=...         # MCP server URLs

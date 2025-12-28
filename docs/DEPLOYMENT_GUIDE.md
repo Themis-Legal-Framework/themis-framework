@@ -59,7 +59,7 @@ ANTHROPIC_API_KEY=sk-ant-your-key-here
 USE_EXTENDED_THINKING=true        # Enable deep reasoning (default: true)
 USE_PROMPT_CACHING=true           # Enable 1-hour caching (default: true)
 ENABLE_CODE_EXECUTION=false       # Enable Python execution (default: false)
-MODEL=claude-3-5-sonnet-20241022  # Claude model version
+# MODEL=claude-opus-4-5-20251101  # Defaults to Opus 4.5
 ```
 
 ### Step 3: Launch

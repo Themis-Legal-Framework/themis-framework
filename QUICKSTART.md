@@ -50,8 +50,8 @@ USE_PROMPT_CACHING=true
 # Code Execution - Python execution for calculations (default: false)
 ENABLE_CODE_EXECUTION=false
 
-# Model version
-MODEL=claude-3-5-sonnet-20241022
+# Model version (defaults to Claude Opus 4.5 if unset)
+# MODEL=claude-opus-4-5-20251101
 ```
 
 For MCP (Model Context Protocol) integration, edit `.mcp.json` to configure external tool servers.

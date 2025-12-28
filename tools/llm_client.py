@@ -34,6 +34,10 @@ from tools.stub_llm_client import StubLLMHandler
 logger = logging.getLogger("themis.llm_client")
 
 
+# Default to Claude Opus 4.5 - the latest and most capable reasoning model
+DEFAULT_MODEL = "claude-opus-4-5-20251101"
+
+
 class LLMClient:
     """Wrapper for Anthropic Claude API with structured output support.
 
@@ -47,7 +51,7 @@ class LLMClient:
     def __init__(
         self,
         api_key: str | None = None,
-        model: str = "claude-3-5-sonnet-20241022",
+        model: str | None = None,
         use_extended_thinking: bool = True,  # Enabled by default for deeper reasoning
         use_prompt_caching: bool = True,     # Enabled by default for cost/latency optimization
         enable_code_execution: bool = False,
@@ -57,14 +61,15 @@ class LLMClient:
         Args:
             api_key: Anthropic API key. If ``None`` the environment variable
                 ``ANTHROPIC_API_KEY`` is consulted.
-            model: Claude model to use when the API key is present.
+            model: Claude model to use. If ``None`` the environment variable
+                ``MODEL`` is consulted, defaulting to Claude Opus 4.5.
             use_extended_thinking: Enable extended thinking mode for deeper reasoning.
             use_prompt_caching: Enable 1-hour prompt caching for cost savings.
             enable_code_execution: Enable Python code execution tool.
         """
 
         self.api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
-        self.model = model
+        self.model = model or os.getenv("MODEL", DEFAULT_MODEL)
         self.use_extended_thinking = use_extended_thinking
         self.use_prompt_caching = use_prompt_caching
         self.enable_code_execution = enable_code_execution
