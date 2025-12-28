@@ -21,6 +21,12 @@ from orchestrator.exceptions import (
     PlanNotFoundError,
 )
 from orchestrator.policy import RoutingPolicy
+from orchestrator.retry import (
+    DEFAULT_AGENT_RETRY_POLICY,
+    RetryPolicy,
+    RetryResult,
+    retry_async,
+)
 from orchestrator.storage.sqlite_repository import SQLiteOrchestratorStateRepository
 from orchestrator.task_graph import TaskGraph
 from orchestrator.tracing import TraceRecorder
@@ -43,6 +49,7 @@ class OrchestratorService:
         policy: RoutingPolicy | None = None,
         connectors: ConnectorRegistry | None = None,
         tracer_factory: Callable[[], TraceRecorder] | None = None,
+        retry_policy: RetryPolicy | None = None,
     ) -> None:
         self.repository = repository or SQLiteOrchestratorStateRepository()
         self.agents = agents or {
@@ -54,6 +61,7 @@ class OrchestratorService:
         self.policy = policy or RoutingPolicy()
         self.connectors = connectors or ConnectorRegistry()
         self._tracer_factory = tracer_factory or TraceRecorder
+        self.retry_policy = retry_policy or DEFAULT_AGENT_RETRY_POLICY
 
         # State caching with TTL
         self._state_cache = None
@@ -247,7 +255,20 @@ class OrchestratorService:
                             agent_input["metadata"] = {}
                         agent_input["metadata"]["document_type"] = detected_type
 
-                output = await agent.run(agent_input)
+                # Execute agent with retry policy
+                retry_result: RetryResult = await retry_async(
+                    lambda: agent.run(agent_input),
+                    self.retry_policy,
+                    operation_name=f"agent:{agent_name}",
+                )
+
+                if not retry_result.success:
+                    raise retry_result.last_exception or Exception("Agent execution failed")
+
+                output = retry_result.result
+                if retry_result.attempts > 1:
+                    step_result["retry_attempts"] = retry_result.attempts
+
             except Exception as exc:  # pragma: no cover - defensive programming
                 step_result["status"] = "failed"
                 step_result["error"] = str(exc)
@@ -328,7 +349,22 @@ class OrchestratorService:
                         }
                     )
                     try:
-                        support_output = await support_agent.run(support_input)
+                        # Execute supporting agent with retry policy
+                        support_retry_result: RetryResult = await retry_async(
+                            lambda: support_agent.run(support_input),
+                            self.retry_policy,
+                            operation_name=f"support:{support_agent_name}",
+                        )
+
+                        if not support_retry_result.success:
+                            raise support_retry_result.last_exception or Exception(
+                                "Supporting agent execution failed"
+                            )
+
+                        support_output = support_retry_result.result
+                        if support_retry_result.attempts > 1:
+                            support_result["retry_attempts"] = support_retry_result.attempts
+
                     except Exception as exc:  # pragma: no cover - defensive
                         support_result["status"] = "failed"
                         support_result["error"] = str(exc)
@@ -424,6 +460,239 @@ class OrchestratorService:
         if execution is None:
             raise ExecutionNotFoundError(plan_id)
         return deepcopy(execution.get("artifacts", {}))
+
+    async def get_execution(self, plan_id: str) -> dict[str, Any]:
+        """Retrieve the full execution record for a given plan identifier.
+
+        Args:
+            plan_id: The plan ID to get execution for.
+
+        Returns:
+            The full execution record.
+
+        Raises:
+            ExecutionNotFoundError: If the execution does not exist.
+        """
+        self.state = self._load_state()
+        execution = self.state.recall_execution(plan_id)
+        if execution is None:
+            raise ExecutionNotFoundError(plan_id)
+        return deepcopy(execution)
+
+    async def re_execute(
+        self,
+        plan_id: str,
+        from_step: str | None = None,
+        resume_from_failure: bool = True,
+    ) -> dict[str, Any]:
+        """Re-execute a plan, optionally resuming from a specific step or failure point.
+
+        This method allows resuming execution from:
+        - A specific step ID (from_step parameter)
+        - The first failed step (resume_from_failure=True, default)
+        - The beginning (from_step=None, resume_from_failure=False)
+
+        Completed steps are preserved in the execution record.
+
+        Args:
+            plan_id: The plan ID to re-execute.
+            from_step: Optional step ID to resume from.
+            resume_from_failure: If True (default), resume from first failed step.
+
+        Returns:
+            Updated execution record.
+
+        Raises:
+            PlanNotFoundError: If the plan does not exist.
+        """
+        self.state = self._load_state()
+        plan = self.state.recall_plan(plan_id)
+        if plan is None:
+            raise PlanNotFoundError(plan_id)
+
+        # Get previous execution if exists
+        previous_execution = self.state.recall_execution(plan_id)
+
+        # Determine start point
+        start_step_id: str | None = None
+        if from_step:
+            start_step_id = from_step
+        elif resume_from_failure and previous_execution:
+            # Find first failed step
+            for step in previous_execution.get("steps", []):
+                if step.get("status") == "failed":
+                    start_step_id = step.get("id")
+                    break
+
+        logger.info(
+            "Re-executing plan %s from step: %s",
+            plan_id,
+            start_step_id or "beginning",
+        )
+
+        # Prepare execution state
+        plan_matter = deepcopy(plan.get("matter", {}))
+        steps_results: list[dict[str, Any]] = []
+        artifacts: dict[str, Any] = {}
+        propagated: dict[str, Any] = {}
+        overall_status = "complete"
+        needs_attention = False
+        tracer = self._tracer_factory()
+        past_start_point = start_step_id is None
+
+        # Restore artifacts from completed steps if resuming
+        if previous_execution and start_step_id:
+            for step in previous_execution.get("steps", []):
+                if step.get("id") == start_step_id:
+                    past_start_point = True
+                    break
+                if step.get("status") == "complete":
+                    # Preserve completed step
+                    steps_results.append(deepcopy(step))
+                    if step.get("output"):
+                        agent_name = step.get("agent")
+                        artifacts[agent_name] = step["output"]
+                        propagated[agent_name] = step["output"]
+                    if step.get("artifacts"):
+                        propagated.update(step["artifacts"])
+                        plan_matter.update(step["artifacts"])
+
+        graph_payload = plan.get("graph")
+        if graph_payload:
+            graph = TaskGraph.from_dict(graph_payload)
+        else:
+            graph = TaskGraph.from_linear_steps(plan.get("steps", []))
+
+        plan_steps_map = {step["id"]: step for step in plan.get("steps", [])}
+
+        for node in graph.topological_order():
+            step = plan_steps_map.get(node.id, node.as_dict())
+
+            # Skip until we reach start point
+            if not past_start_point:
+                if step["id"] == start_step_id:
+                    past_start_point = True
+                else:
+                    continue
+
+            # Skip if already in results (from preserved completed steps)
+            if any(r.get("id") == step["id"] for r in steps_results):
+                continue
+
+            agent_name = step["agent"]
+            agent = self.agents.get(agent_name)
+            step_result: dict[str, Any] = {
+                "id": step["id"],
+                "agent": agent_name,
+                "dependencies": step.get("dependencies", []),
+                "expected_artifacts": step.get("expected_artifacts", []),
+                "phase": step.get("phase"),
+            }
+
+            if agent is None:
+                step_result["status"] = "failed"
+                step_result["error"] = f"Agent '{agent_name}' is not registered"
+                overall_status = "failed"
+                steps_results.append(step_result)
+                continue
+
+            tracer.record(
+                "phase_start",
+                node_id=step_result["id"],
+                agent=agent_name,
+                phase=step.get("phase"),
+            )
+            if hasattr(agent, "attach_tracer"):
+                agent.attach_tracer(tracer, step_result["id"])
+
+            try:
+                agent_input = deepcopy(plan_matter)
+                agent_input.update(propagated)
+                resolved_connectors = self.connectors.resolve(
+                    step.get("required_connectors", [])
+                )
+                if resolved_connectors:
+                    agent_input.setdefault("connectors", {}).update(resolved_connectors)
+
+                # Auto-detect document type before DDA runs
+                if agent_name == "dda" and "document_type" not in agent_input:
+                    if "document_type" not in agent_input.get("metadata", {}):
+                        detected_type = await determine_document_type(agent_input)
+                        agent_input["document_type"] = detected_type
+                        if "metadata" not in agent_input:
+                            agent_input["metadata"] = {}
+                        agent_input["metadata"]["document_type"] = detected_type
+
+                # Execute agent with retry policy
+                retry_result: RetryResult = await retry_async(
+                    lambda: agent.run(agent_input),
+                    self.retry_policy,
+                    operation_name=f"agent:{agent_name}",
+                )
+
+                if not retry_result.success:
+                    raise retry_result.last_exception or Exception("Agent execution failed")
+
+                output = retry_result.result
+                if retry_result.attempts > 1:
+                    step_result["retry_attempts"] = retry_result.attempts
+
+            except Exception as exc:
+                step_result["status"] = "failed"
+                step_result["error"] = str(exc)
+                overall_status = "failed"
+            else:
+                step_result["status"] = "complete"
+                step_result["output"] = output
+                artifacts[agent_name] = output
+                propagated[agent_name] = output
+
+                produced_artifacts = _collect_expected_artifacts(
+                    output, step.get("expected_artifacts", [])
+                )
+                if produced_artifacts:
+                    propagated.update(produced_artifacts)
+                    plan_matter.update(produced_artifacts)
+                    step_result["artifacts"] = produced_artifacts
+
+            finally:
+                tracer.record(
+                    "phase_complete",
+                    node_id=step_result["id"],
+                    agent=agent_name,
+                    status=step_result.get("status"),
+                )
+
+            if step_result.get("status") == "complete":
+                missing_signals = self.policy.evaluate_exit_conditions(
+                    step, {**plan_matter, **propagated}
+                )
+                if missing_signals:
+                    step_result["status"] = "attention_required"
+                    step_result["missing_signals"] = missing_signals
+                    needs_attention = True
+
+            steps_results.append(step_result)
+
+        execution_record = {
+            "plan_id": plan_id,
+            "status": overall_status,
+            "steps": steps_results,
+            "artifacts": artifacts,
+            "trace": tracer.flush(),
+            "re_execution": True,
+        }
+
+        if overall_status != "failed":
+            overall_status = "attention_required" if needs_attention else "complete"
+            execution_record["status"] = overall_status
+
+        plan["status"] = overall_status
+        self.state.remember_plan(plan_id, deepcopy(plan))
+        self.state.remember_execution(plan_id, deepcopy(execution_record))
+        self._save_state()
+
+        return execution_record
 
 
 def _collect_expected_artifacts(
