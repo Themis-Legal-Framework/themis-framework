@@ -22,6 +22,7 @@ from packs.criminal_defense.generators import (
     MotionRecommendationsGenerator,
     PreservationLetterGenerator,
     SuppressionMotionGenerator,
+    TimelineGenerator,
     WitnessInterviewGenerator,
 )
 from packs.criminal_defense.schema import (
@@ -85,10 +86,15 @@ def persist_outputs(
 
     saved_paths: list[Path] = []
 
-    # 1. Case Timeline with Constitutional Issues
-    timeline_path = matter_output_dir / "case_timeline.csv"
-    timeline_content = _generate_timeline(matter, execution_result)
-    timeline_path.write_text(timeline_content, encoding="utf-8")
+    # 1. Case Timeline with Constitutional Issues (CSV format)
+    timeline_gen = TimelineGenerator(matter, execution_result)
+    timeline_csv_path = matter_output_dir / "case_timeline.csv"
+    timeline_csv_path.write_text(timeline_gen.render_csv(), encoding="utf-8")
+    saved_paths.append(timeline_csv_path)
+
+    # 1b. Case Timeline (human-readable format)
+    timeline_path = matter_output_dir / "case_timeline.txt"
+    timeline_path.write_text(timeline_gen.render(), encoding="utf-8")
     saved_paths.append(timeline_path)
 
     # 2. Constitutional Issues Analysis (always generate from matter)
@@ -254,29 +260,6 @@ def _should_generate_suppression_motion(matter: dict[str, Any], result: dict[str
         issue.get("issue_type") for issue in issues if isinstance(issue, dict)
     }
     return bool(constitutional_issue_types & {"fourth_amendment", "fifth_amendment", "sixth_amendment"})
-
-
-def _generate_timeline(matter: dict[str, Any], result: dict[str, Any]) -> str:
-    """Generate chronological case timeline CSV."""
-    lines = ["date,event,constitutional_flag\n"]
-
-    # Add arrest date
-    arrest = matter.get("arrest", {})
-    if arrest.get("date"):
-        lines.append(f"{arrest['date']},Arrest: {arrest.get('circumstances', 'Arrested')},\n")
-
-    # Add discovery dates
-    for doc in matter.get("discovery_received", []):
-        if isinstance(doc, dict) and doc.get("date_received"):
-            lines.append(f"{doc['date_received']},Discovery received: {doc.get('document_type', 'Document')},\n")
-
-    # Add interrogation if present
-    interrogation = matter.get("interrogation", {})
-    if interrogation.get("was_interrogated"):
-        flag = "⚠ Miranda issue" if not interrogation.get("miranda_given") else ""
-        lines.append(f"{arrest.get('date', '')},Interrogation conducted,{flag}\n")
-
-    return "".join(lines)
 
 
 def _slugify(text: str) -> str:
