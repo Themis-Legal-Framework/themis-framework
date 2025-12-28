@@ -6,7 +6,6 @@ import argparse
 import asyncio
 import json
 import re
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +15,15 @@ except ModuleNotFoundError:  # pragma: no cover - executed when PyYAML missing
     yaml = None  # type: ignore[assignment]
 
 from orchestrator.service import OrchestratorService
+from packs.criminal_defense.generators import (
+    BradyChecklistGenerator,
+    ConstitutionalAnalysisGenerator,
+    DiscoveryDemandGenerator,
+    MotionRecommendationsGenerator,
+    PreservationLetterGenerator,
+    SuppressionMotionGenerator,
+    WitnessInterviewGenerator,
+)
 from packs.criminal_defense.schema import (
     format_validation_errors,
     validate_matter_schema,
@@ -76,16 +84,6 @@ def persist_outputs(
     matter_output_dir.mkdir(parents=True, exist_ok=True)
 
     saved_paths: list[Path] = []
-    artifacts = execution_result.get("artifacts", {})
-
-    # Criminal Case Analyst (CCA) output
-    cca_output = artifacts.get("cca") if isinstance(artifacts, dict) else None
-
-    # Discovery & Motion Specialist (DMS) output
-    dms_output = artifacts.get("dms") if isinstance(artifacts, dict) else None
-
-    # Legal Strategist & Writer (LSW) output
-    lsw_output = artifacts.get("lsw") if isinstance(artifacts, dict) else None
 
     # 1. Case Timeline with Constitutional Issues
     timeline_path = matter_output_dir / "case_timeline.csv"
@@ -93,56 +91,54 @@ def persist_outputs(
     timeline_path.write_text(timeline_content, encoding="utf-8")
     saved_paths.append(timeline_path)
 
-    # 2. Constitutional Issues Analysis
-    if cca_output:
-        analysis_path = matter_output_dir / "constitutional_issues_analysis.txt"
-        analysis_content = _generate_constitutional_analysis(matter, execution_result)
-        analysis_path.write_text(analysis_content, encoding="utf-8")
-        saved_paths.append(analysis_path)
+    # 2. Constitutional Issues Analysis (always generate from matter)
+    analysis_path = matter_output_dir / "constitutional_issues_analysis.txt"
+    analysis_gen = ConstitutionalAnalysisGenerator(matter, execution_result)
+    analysis_path.write_text(analysis_gen.render(), encoding="utf-8")
+    saved_paths.append(analysis_path)
 
     # 3. Discovery Demand Letter
-    if dms_output:
-        discovery_path = matter_output_dir / "discovery_demand.txt"
-        discovery_content = _generate_discovery_demand(matter, execution_result)
-        discovery_path.write_text(discovery_content, encoding="utf-8")
-        saved_paths.append(discovery_path)
+    discovery_path = matter_output_dir / "discovery_demand.txt"
+    discovery_gen = DiscoveryDemandGenerator(matter, execution_result)
+    discovery_path.write_text(discovery_gen.render(), encoding="utf-8")
+    saved_paths.append(discovery_path)
 
     # 4. Brady/Giglio Checklist
     brady_path = matter_output_dir / "brady_giglio_checklist.txt"
-    brady_content = _generate_brady_checklist(matter, execution_result)
-    brady_path.write_text(brady_content, encoding="utf-8")
+    brady_gen = BradyChecklistGenerator(matter, execution_result)
+    brady_path.write_text(brady_gen.render(), encoding="utf-8")
     saved_paths.append(brady_path)
 
     # 5. Suppression Motion (only if constitutional issues warrant it)
-    if lsw_output and _should_generate_suppression_motion(matter, execution_result):
+    if _should_generate_suppression_motion(matter, execution_result):
         motion_path = matter_output_dir / "motion_to_suppress.txt"
-        motion_content = _generate_suppression_motion(matter, execution_result)
-        motion_path.write_text(motion_content, encoding="utf-8")
+        motion_gen = SuppressionMotionGenerator(matter, execution_result)
+        motion_path.write_text(motion_gen.render(), encoding="utf-8")
         saved_paths.append(motion_path)
 
     # 6. Evidence Preservation Letter
     preservation_path = matter_output_dir / "evidence_preservation_letter.txt"
-    preservation_content = _generate_preservation_letter(matter, execution_result)
-    preservation_path.write_text(preservation_content, encoding="utf-8")
+    preservation_gen = PreservationLetterGenerator(matter, execution_result)
+    preservation_path.write_text(preservation_gen.render(), encoding="utf-8")
     saved_paths.append(preservation_path)
 
     # 7. Witness Interview Checklist
     witness_path = matter_output_dir / "witness_interview_checklist.txt"
-    witness_content = _generate_witness_checklist(matter, execution_result)
-    witness_path.write_text(witness_content, encoding="utf-8")
+    witness_gen = WitnessInterviewGenerator(matter, execution_result)
+    witness_path.write_text(witness_gen.render(), encoding="utf-8")
     saved_paths.append(witness_path)
 
     # 8. Motion Recommendations
     recommendations_path = matter_output_dir / "pretrial_motion_recommendations.txt"
-    recommendations_content = _generate_motion_recommendations(matter, execution_result)
-    recommendations_path.write_text(recommendations_content, encoding="utf-8")
+    recommendations_gen = MotionRecommendationsGenerator(matter, execution_result)
+    recommendations_path.write_text(recommendations_gen.render(), encoding="utf-8")
     saved_paths.append(recommendations_path)
 
     return saved_paths
 
 
 def _normalise_matter(raw: dict[str, Any], *, source: Path) -> dict[str, Any]:
-    """Normalize criminal defense matter data."""
+    """Normalize criminal defense matter data for orchestrator compatibility."""
     if not isinstance(raw, dict):
         raise ValueError("Matter payload must be an object")
 
@@ -164,10 +160,11 @@ def _normalise_matter(raw: dict[str, Any], *, source: Path) -> dict[str, Any]:
         raise ValueError("Matter must include arrest information")
 
     # Generate matter ID and name
+    jurisdiction = existing_metadata.get("jurisdiction", "State")
     case_number = existing_metadata.get("case_number") or raw.get("case_number") or source.stem
     client_name = client.get("name", "Unknown Client")
     matter_id = str(case_number).strip() or source.stem
-    matter_name = f"{existing_metadata.get('jurisdiction', 'State')} v. {client_name}"
+    matter_name = f"{jurisdiction} v. {client_name}"
 
     slug_value = existing_metadata.get("slug")
     slug = _slugify(str(slug_value)) if isinstance(slug_value, str) and slug_value.strip() else _slugify(matter_id)
@@ -181,7 +178,48 @@ def _normalise_matter(raw: dict[str, Any], *, source: Path) -> dict[str, Any]:
         "source_file": str(source),
     })
 
+    # Build summary for orchestrator compatibility
+    charge_descriptions = [c.get("description", "") for c in charges if isinstance(c, dict)]
+    summary = f"Criminal defense matter: {matter_name}. Charges: {'; '.join(charge_descriptions)}."
+    if raw.get("defense_theory"):
+        summary += f" Defense theory: {raw['defense_theory']}"
+
+    # Build parties list for orchestrator compatibility
+    parties = [
+        {"name": client_name, "role": "Defendant"},
+        {"name": jurisdiction, "role": "Prosecution"},
+    ]
+
+    # Build documents list from discovery for orchestrator compatibility
+    documents: list[dict[str, Any]] = []
+    for doc in raw.get("discovery_received", []):
+        if isinstance(doc, dict):
+            documents.append({
+                "title": doc.get("document_type", "Discovery Document"),
+                "content": doc.get("summary", ""),
+                "date": doc.get("date_received", ""),
+            })
+    # Add arrest report as a document
+    if arrest:
+        documents.append({
+            "title": "Arrest Report",
+            "content": arrest.get("circumstances", "Arrest details"),
+            "date": arrest.get("date", ""),
+        })
+    # Ensure at least one document
+    if not documents:
+        documents.append({
+            "title": "Case File",
+            "content": "Criminal case file - discovery pending",
+            "date": arrest.get("date", ""),
+        })
+
     normalised: dict[str, Any] = {
+        # Orchestrator-required fields
+        "summary": summary,
+        "parties": parties,
+        "documents": documents,
+        # Criminal defense specific fields
         "matter_id": matter_id,
         "matter_name": matter_name,
         "metadata": metadata,
@@ -206,20 +244,15 @@ def _normalise_matter(raw: dict[str, Any], *, source: Path) -> dict[str, Any]:
 
 def _should_generate_suppression_motion(matter: dict[str, Any], result: dict[str, Any]) -> bool:
     """Determine if a suppression motion should be generated based on constitutional issues."""
-    # Check if CCA identified suppression-worthy issues
-    artifacts = result.get("artifacts", {})
-    cca_output = artifacts.get("cca") if isinstance(artifacts, dict) else None
-
-    if not cca_output:
-        return False
-
-    # Check for high-severity constitutional issues
+    # Check for constitutional issues in the matter
     issues = matter.get("constitutional_issues", [])
-    if not isinstance(issues, list):
+    if not isinstance(issues, list) or not issues:
         return False
 
     # Generate motion if there are Fourth, Fifth, or Sixth Amendment issues
-    constitutional_issue_types = {issue.get("issue_type") for issue in issues if isinstance(issue, dict)}
+    constitutional_issue_types = {
+        issue.get("issue_type") for issue in issues if isinstance(issue, dict)
+    }
     return bool(constitutional_issue_types & {"fourth_amendment", "fifth_amendment", "sixth_amendment"})
 
 
@@ -244,425 +277,6 @@ def _generate_timeline(matter: dict[str, Any], result: dict[str, Any]) -> str:
         lines.append(f"{arrest.get('date', '')},Interrogation conducted,{flag}\n")
 
     return "".join(lines)
-
-
-def _generate_constitutional_analysis(matter: dict[str, Any], result: dict[str, Any]) -> str:
-    """Generate constitutional issues analysis from CCA agent output."""
-    artifacts = result.get("artifacts", {})
-    cca_output = artifacts.get("cca", {}) if isinstance(artifacts, dict) else {}
-
-    lines = [
-        "CONSTITUTIONAL ISSUE ANALYSIS",
-        f"Case: {matter.get('matter_name', 'Unknown')}",
-        f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
-        "",
-        "=" * 80,
-        ""
-    ]
-
-    # Get analysis from CCA agent
-    if isinstance(cca_output, dict) and "constitutional_analysis" in cca_output:
-        lines.append(str(cca_output["constitutional_analysis"]))
-    else:
-        # Fallback: analyze constitutional issues from matter file
-        issues = matter.get("constitutional_issues", [])
-        if issues:
-            lines.append("IDENTIFIED CONSTITUTIONAL ISSUES:")
-            lines.append("")
-            for idx, issue in enumerate(issues, 1):
-                if isinstance(issue, dict):
-                    lines.append(f"{idx}. {issue.get('issue_type', 'Unknown').upper().replace('_', ' ')}")
-                    lines.append(f"   {issue.get('description', 'No description provided')}")
-                    lines.append("")
-        else:
-            lines.append("No constitutional issues identified in matter file.")
-            lines.append("Review case facts for potential Fourth, Fifth, or Sixth Amendment violations.")
-
-    lines.append("")
-    lines.append("=" * 80)
-    lines.append("**ATTORNEY REVIEW REQUIRED** - Verify all analysis before filing motions")
-
-    return "\n".join(lines)
-
-
-def _generate_discovery_demand(matter: dict[str, Any], result: dict[str, Any]) -> str:
-    """Generate discovery demand letter from DMS agent output."""
-    artifacts = result.get("artifacts", {})
-    dms_output = artifacts.get("dms", {}) if isinstance(artifacts, dict) else {}
-
-    metadata = matter.get("metadata", {})
-    jurisdiction = metadata.get("jurisdiction", "State")
-
-    lines = [
-        "[ATTORNEY LETTERHEAD]",
-        "",
-        datetime.now().strftime("%B %d, %Y"),
-        "",
-        "District Attorney's Office",
-        f"{jurisdiction}",
-        "",
-        f"Re: {matter.get('matter_name', 'Unknown Case')}",
-        f"    Case No. {metadata.get('case_number', 'Unknown')}",
-        "",
-        "Dear Prosecutor:",
-        "",
-        f"Pursuant to applicable discovery rules in {jurisdiction} and Brady v. Maryland, "
-        f"defendant {matter.get('client', {}).get('name', 'Unknown')} requests immediate disclosure "
-        "of the following discovery materials:",
-        "",
-    ]
-
-    # Get discovery demand from DMS agent
-    if isinstance(dms_output, dict) and "discovery_demand" in dms_output:
-        lines.append(str(dms_output["discovery_demand"]))
-    else:
-        # Fallback: generate basic discovery demand
-        lines.extend([
-            "I. MANDATORY DISCLOSURE",
-            "",
-            "1. All police reports and investigative materials",
-            "2. All witness statements (recorded and written)",
-            "3. All physical evidence seized or obtained",
-            "4. All scientific reports and lab results",
-            "5. All photographs and video/audio recordings",
-            "",
-            "II. EXCULPATORY EVIDENCE (Brady/Giglio)",
-            "",
-            "1. Any evidence favorable to the defendant",
-            "2. Any impeachment evidence regarding prosecution witnesses",
-            "3. Any evidence of other suspects",
-            "4. Any prior inconsistent statements by witnesses",
-            "",
-        ])
-
-        # Charge-specific requests
-        charges = matter.get("charges", [])
-        if charges and isinstance(charges[0], dict):
-            first_charge = charges[0].get("description", "").lower()
-
-            if "dui" in first_charge or "dwi" in first_charge:
-                lines.extend([
-                    "III. DUI-SPECIFIC DISCOVERY",
-                    "",
-                    "1. Breathalyzer/blood test calibration records",
-                    "2. Officer training and certification records",
-                    "3. Dash cam and body cam footage",
-                    "4. Field sobriety test videos",
-                    "",
-                ])
-            elif "drug" in first_charge or "controlled substance" in first_charge:
-                lines.extend([
-                    "III. DRUG CASE DISCOVERY",
-                    "",
-                    "1. Laboratory analysis and chain of custody",
-                    "2. Confidential informant identity/reliability records",
-                    "3. Search warrant and supporting affidavit",
-                    "4. Any surveillance recordings",
-                    "",
-                ])
-
-    lines.extend([
-        "",
-        "Please provide this discovery within the time required by law.",
-        "",
-        "Respectfully submitted,",
-        "",
-        "[DEFENSE ATTORNEY NAME]",
-        "Attorney for Defendant",
-    ])
-
-    return "\n".join(lines)
-
-
-def _generate_brady_checklist(matter: dict[str, Any], result: dict[str, Any]) -> str:
-    """Generate Brady/Giglio exculpatory evidence checklist."""
-    lines = [
-        "BRADY/GIGLIO EXCULPATORY EVIDENCE CHECKLIST",
-        f"Case: {matter.get('matter_name', 'Unknown')}",
-        "",
-        "=" * 80,
-        "",
-        "EXCULPATORY EVIDENCE TO DEMAND:",
-        "",
-        "[ ] Evidence favorable to defendant on guilt or punishment",
-        "[ ] Witness credibility/impeachment evidence:",
-        "    [ ] Prior inconsistent statements",
-        "    [ ] Bias, motive to lie, or interest in outcome",
-        "    [ ] Criminal convictions of prosecution witnesses",
-        "    [ ] Pending charges against prosecution witnesses",
-        "    [ ] Promises, deals, or benefits given to witnesses",
-        "[ ] Evidence of other suspects or alternative perpetrators",
-        "[ ] Evidence contradicting prosecution theory",
-        "[ ] Evidence supporting defense theory",
-        "[ ] Police officer disciplinary records (Brady-Giglio material)",
-        "[ ] Evidence of investigative misconduct",
-        "[ ] Exculpatory scientific evidence or conflicting expert opinions",
-        "",
-    ]
-
-    # Add case-specific items
-    if matter.get("search_and_seizure"):
-        lines.extend([
-            "SEARCH & SEIZURE SPECIFIC:",
-            "[ ] Evidence of illegal search or seizure",
-            "[ ] Evidence warrant was based on false information",
-            "[ ] Evidence of consent being involuntary or coerced",
-            "",
-        ])
-
-    if matter.get("interrogation"):
-        lines.extend([
-            "CONFESSION/INTERROGATION SPECIFIC:",
-            "[ ] Evidence confession was coerced or involuntary",
-            "[ ] Evidence of Miranda violations",
-            "[ ] Evidence of promises made to induce confession",
-            "",
-        ])
-
-    return "\n".join(lines)
-
-
-def _generate_suppression_motion(matter: dict[str, Any], result: dict[str, Any]) -> str:
-    """Generate motion to suppress from LSW agent output."""
-    artifacts = result.get("artifacts", {})
-    lsw_output = artifacts.get("lsw", {}) if isinstance(artifacts, dict) else {}
-
-    metadata = matter.get("metadata", {})
-
-    lines = [
-        f"{metadata.get('court', 'SUPERIOR COURT')}",
-        f"{metadata.get('jurisdiction', 'STATE')}",
-        "",
-        "=" * 80,
-        "",
-        f"{matter.get('matter_name', 'State v. Unknown')}",
-        f"Case No. {metadata.get('case_number', 'Unknown')}",
-        "",
-        "MOTION TO SUPPRESS EVIDENCE",
-        "",
-        "=" * 80,
-        "",
-    ]
-
-    # Get motion from LSW agent
-    if isinstance(lsw_output, dict) and "suppression_motion" in lsw_output:
-        lines.append(str(lsw_output["suppression_motion"]))
-    else:
-        # Fallback: generate basic motion structure
-        lines.extend([
-            "COMES NOW the Defendant, by and through undersigned counsel, and respectfully ",
-            "moves this Court to suppress all evidence obtained as a result of violations of ",
-            "the Fourth, Fifth, and/or Sixth Amendments to the United States Constitution.",
-            "",
-            "FACTUAL BACKGROUND",
-            "",
-            f"On or about {matter.get('arrest', {}).get('date', '[DATE]')}, "
-            f"{matter.get('client', {}).get('name', 'Defendant')} was arrested by "
-            f"{matter.get('arrest', {}).get('arresting_agency', 'law enforcement')}.",
-            "",
-            "LEGAL ARGUMENT",
-            "",
-        ])
-
-        # Add constitutional arguments based on identified issues
-        issues = matter.get("constitutional_issues", [])
-        for issue in issues:
-            if isinstance(issue, dict):
-                issue_type = issue.get("issue_type", "")
-                if "fourth" in issue_type:
-                    lines.extend([
-                        "I. THE EVIDENCE MUST BE SUPPRESSED DUE TO FOURTH AMENDMENT VIOLATIONS",
-                        "",
-                        f"{issue.get('description', 'Fourth Amendment violation occurred.')}",
-                        "",
-                    ])
-                elif "fifth" in issue_type:
-                    lines.extend([
-                        "II. DEFENDANT'S STATEMENTS MUST BE SUPPRESSED DUE TO FIFTH AMENDMENT VIOLATIONS",
-                        "",
-                        f"{issue.get('description', 'Fifth Amendment violation occurred.')}",
-                        "",
-                    ])
-
-        lines.extend([
-            "",
-            "CONCLUSION",
-            "",
-            "For the foregoing reasons, Defendant respectfully requests that this Court grant ",
-            "this Motion to Suppress and exclude all evidence obtained in violation of Defendant's ",
-            "constitutional rights.",
-            "",
-            "Respectfully submitted,",
-            "",
-            "[DEFENSE ATTORNEY NAME]",
-            "Attorney for Defendant",
-            "",
-            "**ATTORNEY REVIEW REQUIRED** - This is a draft motion. Review and customize before filing.",
-        ])
-
-    return "\n".join(lines)
-
-
-def _generate_preservation_letter(matter: dict[str, Any], result: dict[str, Any]) -> str:
-    """Generate evidence preservation/spoliation letter."""
-    metadata = matter.get("metadata", {})
-
-    lines = [
-        "[ATTORNEY LETTERHEAD]",
-        "",
-        datetime.now().strftime("%B %d, %Y"),
-        "",
-        f"{matter.get('arrest', {}).get('arresting_agency', 'Police Department')}",
-        "ATTENTION: Evidence Custodian",
-        "",
-        f"Re: {matter.get('matter_name', 'Unknown Case')}",
-        f"    Case No. {metadata.get('case_number', 'Unknown')}",
-        "    EVIDENCE PRESERVATION DEMAND",
-        "",
-        "Dear Sir or Madam:",
-        "",
-        f"This office represents {matter.get('client', {}).get('name', 'the defendant')} in the above-referenced matter. ",
-        "This letter serves as formal notice and demand that your agency preserve all evidence related to this case.",
-        "",
-        "YOU ARE HEREBY DIRECTED TO PRESERVE THE FOLLOWING EVIDENCE:",
-        "",
-        "1. All video and audio recordings (dash cam, body cam, surveillance, interrogation)",
-        "2. All photographs and digital images",
-        "3. All physical evidence seized or collected",
-        "4. All laboratory tests, reports, and raw data",
-        "5. All written reports, notes, and memoranda",
-        "6. All electronic data (emails, text messages, GPS data, computer files)",
-        "7. All radio communications and dispatch logs",
-        "8. All calibration and maintenance records for testing equipment",
-        "",
-    ]
-
-    # Add case-specific preservation items
-    if matter.get("search_and_seizure", {}).get("was_search_conducted"):
-        lines.extend([
-            "SEARCH & SEIZURE RELATED:",
-            "9. All search warrant materials and applications",
-            "10. All evidence of property damage during search",
-            "",
-        ])
-
-    if matter.get("interrogation", {}).get("was_interrogated"):
-        lines.extend([
-            "INTERROGATION RELATED:",
-            "11. All recordings of interrogation (video and audio)",
-            "12. All written statements and Miranda waivers",
-            "",
-        ])
-
-    lines.extend([
-        "FAILURE TO PRESERVE THIS EVIDENCE MAY RESULT IN:",
-        "- Sanctions by the court",
-        "- Adverse jury instructions",
-        "- Dismissal of charges",
-        "- Civil liability for spoliation",
-        "",
-        "Please confirm in writing within 7 days that all evidence is being preserved.",
-        "",
-        "Respectfully submitted,",
-        "",
-        "[DEFENSE ATTORNEY NAME]",
-        "Attorney for Defendant",
-    ])
-
-    return "\n".join(lines)
-
-
-def _generate_witness_checklist(matter: dict[str, Any], result: dict[str, Any]) -> str:
-    """Generate witness interview checklist."""
-    lines = [
-        "WITNESS INTERVIEW CHECKLIST",
-        f"Case: {matter.get('matter_name', 'Unknown')}",
-        "",
-        "=" * 80,
-        "",
-        "KEY WITNESSES TO INTERVIEW:",
-        "",
-    ]
-
-    # Officers
-    officers = matter.get("arrest", {}).get("officers", [])
-    if officers:
-        lines.append("LAW ENFORCEMENT WITNESSES:")
-        for officer in officers:
-            lines.append(f"[ ] {officer}")
-            lines.append("    Questions to ask:")
-            lines.append("    - What was the basis for the stop/arrest?")
-            lines.append("    - What training have you had in [relevant area]?")
-            lines.append("    - Have you testified in court before?")
-            lines.append("")
-
-    lines.extend([
-        "",
-        "CLIENT INTERVIEW:",
-        f"[ ] {matter.get('client', {}).get('name', 'Client')}",
-        "    Questions to ask:",
-        "    - Detailed timeline of events",
-        "    - What exactly did officers say/do?",
-        "    - Were there any witnesses?",
-        "    - Any medical conditions or injuries?",
-        "    - Any prior contacts with these officers?",
-        "",
-        "ADDITIONAL WITNESSES:",
-        "[ ] [Identify additional witnesses from police reports]",
-        "",
-    ])
-
-    return "\n".join(lines)
-
-
-def _generate_motion_recommendations(matter: dict[str, Any], result: dict[str, Any]) -> str:
-    """Generate pretrial motion recommendations."""
-    lines = [
-        "PRETRIAL MOTION RECOMMENDATIONS",
-        f"Case: {matter.get('matter_name', 'Unknown')}",
-        "",
-        "=" * 80,
-        "",
-        "RECOMMENDED MOTIONS (Prioritized):",
-        "",
-    ]
-
-    priority_num = 1
-
-    # Check for suppression opportunities
-    if matter.get("constitutional_issues"):
-        lines.append(f"{priority_num}. MOTION TO SUPPRESS EVIDENCE [HIGH PRIORITY]")
-        lines.append("   Status: Draft motion generated")
-        lines.append("   Basis: Constitutional violations identified")
-        lines.append("")
-        priority_num += 1
-
-    # Always recommend discovery motion
-    lines.append(f"{priority_num}. MOTION TO COMPEL DISCOVERY [HIGH PRIORITY]")
-    lines.append("   Status: Discovery demand letter generated")
-    lines.append("   Timing: File if prosecution fails to respond timely")
-    lines.append("")
-    priority_num += 1
-
-    # Other common motions
-    lines.extend([
-        f"{priority_num}. MOTION FOR BILL OF PARTICULARS [MEDIUM PRIORITY]",
-        "   Purpose: Obtain more specific details about charges",
-        "",
-        f"{priority_num + 1}. MOTION TO REDUCE BAIL [CASE DEPENDENT]",
-        "   Purpose: Reduce excessive bail if client is detained",
-        "",
-        f"{priority_num + 2}. MOTION FOR SPEEDY TRIAL [CASE DEPENDENT]",
-        "   Purpose: Enforce constitutional right to speedy trial",
-        "   Timing: File if prosecution causing delays",
-        "",
-        f"{priority_num + 3}. MOTION IN LIMINE [PRE-TRIAL]",
-        "   Purpose: Exclude prejudicial evidence at trial",
-        "   Topics: Prior bad acts, character evidence, etc.",
-        "",
-    ])
-
-    return "\n".join(lines)
 
 
 def _slugify(text: str) -> str:
