@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 
 from packs.personal_injury.schema import PersonalInjuryMatter, matter_summary
 
@@ -35,7 +35,7 @@ class BaseGenerator:
         raise NotImplementedError
 
     def render(self) -> str:
-        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+        timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
         header = [
             f"Document: {self.template_name or self.__class__.__name__}",
             f"Generated: {timestamp}",
