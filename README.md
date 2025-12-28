@@ -3,7 +3,7 @@ Themis Framework
 
 An open framework for building multi-agent legal reasoning systems that blend data analysis, doctrinal expertise, and strategic counsel under a unified orchestrator.
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) ![Themis Status](https://img.shields.io/badge/status-beta-blue) ![Tests](https://img.shields.io/badge/tests-35-4caf50) ![Docker](https://img.shields.io/badge/docker-ready-0db7ed) ![Python](https://img.shields.io/badge/python-3.10%2B-3776ab)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) ![Themis Status](https://img.shields.io/badge/status-beta-blue) ![Tests](https://img.shields.io/badge/tests-203-4caf50) ![Docker](https://img.shields.io/badge/docker-ready-0db7ed) ![Python](https://img.shields.io/badge/python-3.10%2B-3776ab)
 
 Table of Contents
 -----------------
@@ -98,14 +98,16 @@ See `docs/AGENTIC_ENHANCEMENTS.md` for complete guide and `TEST_RESULTS.md` for 
 - ✅ Docker Deployment – Complete stack with PostgreSQL, Prometheus, and Grafana
 - ✅ Authentication & Security – API key auth with rotation support, rate limiting (10-60 req/min), audit logging
 - ✅ Performance Optimized – SQLite + in-memory state caching (TTL-based) provides 500x faster reads and 10x higher throughput
-- ✅ Comprehensive Testing – 35 tests with 85.7% pass rate across all components
+- ✅ Comprehensive Testing – 203 tests across all components
 - ✅ Type Safety – Pydantic models for Matter, Document, Event, Issue, Authority with validation
+- ✅ Circuit Breaker – Prevents cascading failures with configurable thresholds and automatic recovery
 
 ### Intelligent Agent System
 - 🤖 LLM-Powered Agents – Claude 3.5 Sonnet integration with structured outputs and extended thinking
-- 🔄 Automatic Retry Logic – Exponential backoff for transient failures (3 attempts, 2-10s intervals)
+- 🔄 Automatic Retry Logic – Configurable retry policies with exponential backoff, jitter, and re-execution support
 - 🎯 Smart Routing – Phase-based orchestration with signal propagation and task graphs
 - 📝 Stub Mode – Run without API keys using heuristic fallback generation for testing and development
+- ⚡ Async Execution – Background job processing with webhook callbacks and status polling
 
 ### Observability & Monitoring
 - 📊 Prometheus Metrics – Agent latency, tool invocations, error rates
