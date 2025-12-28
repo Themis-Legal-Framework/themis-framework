@@ -207,7 +207,6 @@ RESULT: ✅ All MCP configuration tests passed!
 ```
 ✅ /analyze-case - Full case analysis workflow
 ✅ /create-pack - New practice pack boilerplate
-✅ /deploy-docker - Docker stack deployment
 ✅ /generate-demand - PI demand letter generation
 ✅ /review-code - Code review checklist
 ✅ /run-tests - Test suite execution

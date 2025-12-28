@@ -5,8 +5,7 @@ Themis Framework exposes a REST API for orchestrating multi-agent legal workflow
 
 Base URL
 --------
-- Local development: `http://localhost:8000`
-- Docker deployment: `http://localhost:8000`
+- Default: `http://localhost:8000`
 
 Authentication
 --------------
@@ -437,4 +436,3 @@ See Also
 --------
 - [Quick Start Guide](../QUICKSTART.md) - Get started with Themis
 - [Deployment Guide](DEPLOYMENT_GUIDE.md) - Production deployment instructions
-- [Docker README](DOCKER_README.md) - Docker setup and configuration

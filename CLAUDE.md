@@ -115,22 +115,6 @@ uvicorn api.main:app --reload
 # - Metrics: http://localhost:8000/metrics
 ```
 
-### Docker Operations
-
-```bash
-# Start full stack (API + PostgreSQL + Prometheus + Grafana)
-docker-compose up -d
-
-# Watch logs
-docker-compose logs -f themis-api
-
-# Run tests in container
-docker-compose exec themis-api pytest tests/
-
-# Stop stack
-docker-compose down
-```
-
 ## Tool System
 
 ### Core Tools
@@ -266,9 +250,8 @@ Available at `/metrics`:
 - `themis_agent_tool_invocations_total` - Tool usage counter
 - `themis_agent_run_errors_total` - Error counter
 
-### Monitoring Stack (Docker)
-- Prometheus: http://localhost:9090
-- Grafana: http://localhost:3000 (admin/admin)
+### Monitoring Stack
+Configure Prometheus to scrape `/metrics` endpoint for visualization in Grafana.
 
 ## Practice Pack Development
 
@@ -364,9 +347,6 @@ make qa
 
 # Start API server
 uvicorn api.main:app --reload
-
-# Start Docker stack
-docker-compose up -d
 
 # Run practice pack
 python -m packs.personal_injury.run --matter path/to/matter.json

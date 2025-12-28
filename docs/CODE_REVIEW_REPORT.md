@@ -829,10 +829,8 @@ This is production-ready code with a few minor improvements needed. Excellent wo
 8. tests/orchestrator/test_policy.py
 9. tests/orchestrator/test_service_persistence.py
 
-### Configuration Files (3)
+### Configuration Files (1)
 1. pyproject.toml
-2. Dockerfile
-3. docker-compose.yml
 
 **Total Lines Reviewed:** ~3,500+ lines
 **Total Test Cases:** 38

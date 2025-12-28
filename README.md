@@ -3,7 +3,7 @@ Themis Framework
 
 An open framework for building multi-agent legal reasoning systems that blend data analysis, doctrinal expertise, and strategic counsel under a unified orchestrator.
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) ![Themis Status](https://img.shields.io/badge/status-beta-blue) ![Tests](https://img.shields.io/badge/tests-203-4caf50) ![Docker](https://img.shields.io/badge/docker-ready-0db7ed) ![Python](https://img.shields.io/badge/python-3.10%2B-3776ab)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) ![Themis Status](https://img.shields.io/badge/status-beta-blue) ![Tests](https://img.shields.io/badge/tests-206-4caf50) ![Python](https://img.shields.io/badge/python-3.10%2B-3776ab)
 
 Table of Contents
 -----------------
@@ -90,12 +90,11 @@ NEW: 7 cutting-edge capabilities from Anthropic's 2025 API features:
 - **Files API** – Upload case documents once, reference across multiple sessions
 - **MCP Connector** – Integration with Model Context Protocol servers for external tools
 - **CLAUDE.md** – Automatic context loading with legal domain knowledge and team guidelines
-- **Slash Commands** – Parameterized workflow templates (6 built-in commands)
+- **Slash Commands** – Parameterized workflow templates (5 built-in commands)
 
 See `docs/AGENTIC_ENHANCEMENTS.md` for complete guide and `TEST_RESULTS.md` for verification (26/26 tests passing).
 
 ### Production-Ready Infrastructure
-- ✅ Docker Deployment – Complete stack with PostgreSQL, Prometheus, and Grafana
 - ✅ Authentication & Security – API key auth with rotation support, rate limiting (10-60 req/min), audit logging
 - ✅ Performance Optimized – SQLite + in-memory state caching (TTL-based) provides 500x faster reads and 10x higher throughput
 - ✅ Comprehensive Testing – 203 tests across all components
@@ -117,10 +116,9 @@ See `docs/AGENTIC_ENHANCEMENTS.md` for complete guide and `TEST_RESULTS.md` for 
 - 🛡️ Request Middleware – Logging, audit, cost tracking, payload size limiting (10MB max)
 
 ### Developer Experience
-- 📚 Comprehensive Documentation – 5 detailed guides covering deployment to code review
+- 📚 Comprehensive Documentation – Detailed guides covering deployment to code review
 - 🧪 Practice Packs – Pre-built workflows for Personal Injury and Criminal Defense
 - 🔧 Extensible Design – Tool injection, custom agents, and practice pack templates
-- 🐳 Docker Ready – Multi-stage builds optimized for production
 
 System Architecture
 -------------------
@@ -192,10 +190,8 @@ themis-framework/
 │   ├── API_REFERENCE.md         # API endpoint documentation
 │   ├── CODE_REVIEW_REPORT.md    # Comprehensive code review
 │   ├── DEPLOYMENT_GUIDE.md      # Production deployment
-│   ├── DOCKER_README.md         # Docker quick reference
 │   ├── IMPLEMENTATION_SUMMARY.md # Technical implementation details
 │   ├── IMPROVEMENTS.md          # Production features overview
-│   ├── REDEPLOY.md              # Redeployment procedures
 │   ├── REVIEW_FINDINGS.md       # Detailed review findings
 │   ├── SECURITY_IMPROVEMENTS.md # Security enhancements
 │   ├── TEST_RESULTS.md          # Test verification report
@@ -205,7 +201,6 @@ themis-framework/
 │   └── commands/          # Slash command workflow templates
 │       ├── analyze-case.md       # Full case analysis workflow
 │       ├── create-pack.md        # New practice pack boilerplate
-│       ├── deploy-docker.md      # Docker stack deployment
 │       ├── generate-demand.md    # PI demand letter generation
 │       ├── review-code.md        # Code review checklist
 │       └── run-tests.md          # Test suite execution
@@ -220,12 +215,9 @@ themis-framework/
 ├── QUICKSTART.md          # 🚀 Quick start guide
 ├── CLAUDE.md              # 🤖 Agent guide with legal domain knowledge
 ├── README.md              # 📖 This file
-├── Dockerfile             # 🐳 Production container build
-├── docker-compose.yml     # 🐳 Full deployment stack
 ├── pyproject.toml         # 📦 Python dependencies
 ├── Makefile               # 🛠️ Development commands
 ├── .env.example           # ⚙️ Environment template (includes new agentic features)
-├── .env.docker            # ⚙️ Docker environment template
 └── .mcp.json              # 🔌 NEW: MCP server configuration template
 ```
 
@@ -392,7 +384,6 @@ Quick Start
 - Python 3.10+ (3.11 recommended)
 - pip or uv for dependency management
 - Anthropic API Key (optional for stub mode)
-- Docker (optional, for containerized deployment)
 
 ### Installation
 ```bash
@@ -546,32 +537,6 @@ class CustomLegalAgent(BaseAgent):
         }
 ```
 
-### Example 3: Docker Deployment
-```bash
-# Copy environment template
-cp .env.docker .env
-
-# Edit .env with your configuration
-nano .env  # Add ANTHROPIC_API_KEY, THEMIS_API_KEY, etc.
-
-# Start full stack (API + PostgreSQL + Prometheus + Grafana)
-docker-compose up -d
-
-# Check logs
-docker-compose logs -f themis-api
-
-# Run tests in container
-docker-compose exec themis-api pytest tests/
-
-# Access services:
-# - API: http://localhost:8000
-# - Prometheus: http://localhost:9090
-# - Grafana: http://localhost:3000 (admin/admin)
-
-# Stop stack
-docker-compose down
-```
-
 Practice Packs
 --------------
 Practice packs bundle domain-specific prompts, validation schemas, and output formatters.
@@ -719,11 +684,6 @@ pytest tests/ --cov         # With coverage report
 # Quality assurance
 make qa                      # Run QA checks
 pytest qa/ -v               # QA test suite
-
-# Docker operations
-docker-compose up -d         # Start services
-docker-compose logs -f       # Watch logs
-docker-compose exec themis-api bash  # Shell into container
 ```
 
 ### Project Standards
@@ -883,12 +843,12 @@ All logs include structured context with automatic sanitization:
 - String truncation (512 char limit in logs)
 
 ### Monitoring Stack
-When running via Docker Compose:
+Configure Prometheus to scrape the `/metrics` endpoint:
 
-- Prometheus (:9090) – Metrics collection and querying
-- Grafana (:3000) – Visualization dashboards (admin/admin)
+- Prometheus – Metrics collection and querying
+- Grafana – Visualization dashboards
 
-Pre-configured dashboards:
+Recommended dashboards:
 
 - Agent Performance (latency, throughput, error rates)
 - System Health (CPU, memory, request rates)
@@ -907,11 +867,10 @@ Documentation
 | `docs/API_REFERENCE.md` | Complete API endpoint documentation |
 | `docs/CODE_REVIEW_REPORT.md` | Comprehensive code review |
 | `docs/DEPLOYMENT_GUIDE.md` | Production deployment instructions |
-| `docs/DOCKER_README.md` | Docker setup and configuration |
 | `docs/IMPROVEMENTS.md` | Production features and enhancements |
 | `docs/IMPLEMENTATION_SUMMARY.md` | Technical implementation details |
 | `docs/TEST_RESULTS.md` | Test verification report |
-| `.claude/commands/*.md` | Slash command workflow templates (6 commands) |
+| `.claude/commands/*.md` | Slash command workflow templates (5 commands) |
 
 Contributing
 ------------

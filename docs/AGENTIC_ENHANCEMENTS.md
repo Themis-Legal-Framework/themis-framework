@@ -398,7 +398,7 @@ Place `CLAUDE.md` at project root: `/home/user/themis-framework/CLAUDE.md`
 
 - Agent architecture overview
 - Legal analysis principles (IRAC, Bluebook citations)
-- Development commands (testing, linting, Docker)
+- Development commands (testing, linting)
 - Tool system documentation
 - Stub mode explanation
 - Practice pack development guide
@@ -417,7 +417,6 @@ Parameterized prompt templates stored in `.claude/commands/` directory. Execute 
 | `/generate-demand` | Create demand letter for PI case | `/generate-demand packs/fixtures/case.json` |
 | `/run-tests` | Execute test suite | `/run-tests agents` |
 | `/review-code` | Perform code review | `/review-code agents/lda.py` |
-| `/deploy-docker` | Deploy Docker stack | `/deploy-docker` |
 | `/create-pack` | Generate new practice pack | `/create-pack employment_law` |
 
 ### Creating Custom Commands
@@ -582,8 +581,8 @@ Themis includes cost tracking middleware:
 # View cost metrics
 curl http://localhost:8000/metrics | grep themis_llm_cost
 
-# Check logs for per-request costs
-docker-compose logs themis-api | grep cost_estimate
+# Check application logs for per-request costs
+grep cost_estimate /var/log/themis/app.log
 ```
 
 ## Troubleshooting

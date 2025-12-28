@@ -1,30 +1,28 @@
-# Themis Framework - Complete Deployment Guide
+# Themis Framework - Deployment Guide
 
-**Version:** 0.1.0
-**Last Updated:** 2025-10-23
+**Version:** 0.2.0
+**Last Updated:** 2025-12-28
 
-This guide covers deploying Themis with all production optimizations: state caching, Docker/PostgreSQL, and enhanced logging.
+This guide covers deploying Themis with production optimizations: state caching, enhanced logging, and monitoring.
 
 ---
 
 ## Table of Contents
 
-1. [Quick Start (Docker)](#quick-start-docker)
-2. [State Caching](#state-caching)
-3. [Docker Deployment](#docker-deployment)
+1. [Quick Start](#quick-start)
+2. [Production Deployment](#production-deployment)
+3. [State Caching](#state-caching)
 4. [Enhanced Logging](#enhanced-logging)
 5. [Monitoring](#monitoring)
 6. [Production Checklist](#production-checklist)
 
 ---
 
-## Quick Start (Docker)
-
-The fastest way to get Themis running in production:
+## Quick Start
 
 ### Prerequisites
-- Docker 20.10+ and Docker Compose 2.0+
-- At least 2GB RAM
+- Python 3.10+ (3.11 recommended)
+- pip or uv for dependency management
 - Valid Anthropic API key
 
 ### Step 1: Clone and Configure
@@ -34,8 +32,15 @@ The fastest way to get Themis running in production:
 git clone https://github.com/themis-agentic-system/themis-framework.git
 cd themis-framework
 
+# Create virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install dependencies
+pip install -e .
+
 # Copy environment template
-cp .env.docker .env
+cp .env.example .env
 
 # Edit .env and set your keys
 nano .env
@@ -50,10 +55,7 @@ THEMIS_API_KEY=$(python -c "import secrets; print(secrets.token_urlsafe(32))")
 # Add your Anthropic API key
 ANTHROPIC_API_KEY=sk-ant-your-key-here
 
-# Set a secure PostgreSQL password
-POSTGRES_PASSWORD=$(python -c "import secrets; print(secrets.token_urlsafe(16))")
-
-# NEW (2025): Agentic Features - Claude Advanced Capabilities
+# Agentic Features - Claude Advanced Capabilities
 USE_EXTENDED_THINKING=true        # Enable deep reasoning (default: true)
 USE_PROMPT_CACHING=true           # Enable 1-hour caching (default: true)
 ENABLE_CODE_EXECUTION=false       # Enable Python execution (default: false)
@@ -63,14 +65,11 @@ MODEL=claude-3-5-sonnet-20241022  # Claude model version
 ### Step 3: Launch
 
 ```bash
-# Start all services
-docker-compose up -d
+# Start the API server
+uvicorn api.main:app --host 0.0.0.0 --port 8000
 
-# Check logs
-docker-compose logs -f api
-
-# Verify health
-curl http://localhost:8000/health
+# Or with auto-reload for development
+uvicorn api.main:app --reload
 ```
 
 ### Step 4: Test
@@ -79,20 +78,110 @@ curl http://localhost:8000/health
 # Set your API key
 export THEMIS_API_KEY="your-api-key-from-env-file"
 
+# Check health
+curl http://localhost:8000/health
+
 # Test the API
-curl -X POST http://localhost:8000/orchestrator/execute \
-  -H "Authorization: Bearer $THEMIS_API_KEY" \
+curl -X POST http://localhost:8000/orchestrator/plan \
+  -H "X-API-Key: $THEMIS_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"matter": {"summary": "Test case", "parties": ["Alice", "Bob"]}}'
+  -d '{"matter": {"summary": "Test case for slip and fall", "parties": ["Alice", "Bob"], "documents": [{"title": "Report", "content": "Details", "date": "2024-01-01"}]}}'
 ```
 
 **That's it!** Themis is now running with:
-- ✅ PostgreSQL database
+- ✅ SQLite persistence
 - ✅ State caching
 - ✅ Enhanced logging
 - ✅ API authentication
 - ✅ Rate limiting
 - ✅ LLM retry logic
+
+---
+
+## Production Deployment
+
+### Using a Process Manager
+
+For production, use a process manager like systemd, supervisor, or PM2:
+
+**systemd service example** (`/etc/systemd/system/themis.service`):
+
+```ini
+[Unit]
+Description=Themis Framework API
+After=network.target
+
+[Service]
+Type=simple
+User=themis
+WorkingDirectory=/opt/themis-framework
+Environment="PATH=/opt/themis-framework/.venv/bin"
+EnvironmentFile=/opt/themis-framework/.env
+ExecStart=/opt/themis-framework/.venv/bin/uvicorn api.main:app --host 0.0.0.0 --port 8000 --workers 4
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable themis
+sudo systemctl start themis
+sudo systemctl status themis
+```
+
+### Using Gunicorn with Uvicorn Workers
+
+For better performance and process management:
+
+```bash
+pip install gunicorn
+
+gunicorn api.main:app \
+  --workers 4 \
+  --worker-class uvicorn.workers.UvicornWorker \
+  --bind 0.0.0.0:8000 \
+  --timeout 120 \
+  --access-logfile - \
+  --error-logfile -
+```
+
+### Reverse Proxy with Nginx
+
+Example nginx configuration:
+
+```nginx
+upstream themis {
+    server 127.0.0.1:8000;
+}
+
+server {
+    listen 80;
+    server_name api.example.com;
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name api.example.com;
+
+    ssl_certificate /etc/letsencrypt/live/api.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/api.example.com/privkey.pem;
+
+    location / {
+        proxy_pass http://themis;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 120s;
+    }
+}
+```
 
 ---
 
@@ -150,198 +239,6 @@ Request → Database → Memory Cache → Response (10ms)
 Request → Database Write → Cache Update → Response
 ```
 
-### Monitoring Cache Performance
-
-Check logs for cache hits/misses:
-
-```bash
-docker-compose logs api | grep "cache"
-```
-
-Output:
-```
-State cache hit (age: 15.23s)
-State cache miss - loading from database
-```
-
----
-
-## Docker Deployment
-
-### Architecture
-
-```
-┌──────────────┐
-│   Client     │
-└──────┬───────┘
-       │ HTTP :8000
-┌──────▼───────────────┐
-│   Themis API         │
-│   (FastAPI +         │
-│    State Cache)      │
-└──────┬───────────────┘
-       │ PostgreSQL :5432
-┌──────▼───────────────┐
-│   PostgreSQL DB      │
-│   (Persistent        │
-│    Storage)          │
-└──────────────────────┘
-```
-
-### Services
-
-| Service | Port | Purpose |
-|---------|------|---------|
-| `api` | 8000 | Themis FastAPI application |
-| `postgres` | 5432 | PostgreSQL database |
-| `prometheus` | 9090 | Metrics collection (optional) |
-| `grafana` | 3000 | Metrics visualization (optional) |
-
-### Docker Compose Commands
-
-```bash
-# Start all services
-docker-compose up -d
-
-# Start with monitoring
-docker-compose --profile monitoring up -d
-
-# View logs
-docker-compose logs -f api
-docker-compose logs -f postgres
-
-# Restart a service
-docker-compose restart api
-
-# Stop all services
-docker-compose down
-
-# Stop and remove volumes (WARNING: deletes database!)
-docker-compose down -v
-
-# Scale API (multiple instances)
-docker-compose up -d --scale api=3
-```
-
-### Environment Variables
-
-All configuration via `.env` file:
-
-```bash
-# Required
-THEMIS_API_KEY=your-secret-key
-ANTHROPIC_API_KEY=sk-ant-...
-POSTGRES_PASSWORD=secure-password
-
-# Optional - System Configuration
-LOG_LEVEL=INFO                 # DEBUG, INFO, WARNING, ERROR
-CACHE_TTL_SECONDS=60          # Cache TTL in seconds
-GRAFANA_PASSWORD=admin        # Grafana admin password
-
-# Optional - Agentic Features (2025)
-USE_EXTENDED_THINKING=true        # Enable deep reasoning (default: true)
-USE_PROMPT_CACHING=true           # Enable 1-hour caching (default: true)
-ENABLE_CODE_EXECUTION=false       # Enable Python execution (default: false)
-MODEL=claude-3-5-sonnet-20241022  # Claude model version
-
-# Optional - MCP Integration
-# Configure MCP servers in .mcp.json
-LEGAL_RESEARCH_MCP_URL=https://example.com/mcp
-LEGAL_RESEARCH_API_KEY=your-mcp-key
-```
-
-### Database Management
-
-**Backup Database:**
-```bash
-docker-compose exec postgres pg_dump -U themis themis > backup.sql
-```
-
-**Restore Database:**
-```bash
-docker-compose exec -T postgres psql -U themis themis < backup.sql
-```
-
-**Access PostgreSQL:**
-```bash
-docker-compose exec postgres psql -U themis -d themis
-```
-
-**View Database Size:**
-```sql
-SELECT pg_size_pretty(pg_database_size('themis'));
-```
-
-### Persistent Data
-
-Data persists in Docker volumes:
-
-```bash
-# List volumes
-docker volume ls | grep themis
-
-# Inspect volume
-docker volume inspect themis-framework_postgres_data
-
-# Backup volume
-docker run --rm \
-  -v themis-framework_postgres_data:/data \
-  -v $(pwd):/backup \
-  alpine tar czf /backup/postgres-backup.tar.gz /data
-```
-
-### Health Checks
-
-All services include health checks:
-
-```bash
-# Check service health
-docker-compose ps
-
-# API health endpoint
-curl http://localhost:8000/health
-
-# Database health
-docker-compose exec postgres pg_isready -U themis
-```
-
-### Troubleshooting Docker
-
-**API won't start:**
-```bash
-# Check logs
-docker-compose logs api
-
-# Check if port 8000 is in use
-lsof -i :8000
-
-# Rebuild image
-docker-compose build --no-cache api
-docker-compose up -d api
-```
-
-**Database connection errors:**
-```bash
-# Check postgres is running
-docker-compose ps postgres
-
-# Check network
-docker network inspect themis-framework_themis-network
-
-# Reset database
-docker-compose down -v
-docker-compose up -d
-```
-
-**Out of disk space:**
-```bash
-# Clean up Docker
-docker system prune -a
-
-# Check volume sizes
-docker system df -v
-```
-
 ---
 
 ## Enhanced Logging
@@ -366,14 +263,6 @@ Set via environment variable:
 LOG_LEVEL=INFO  # or DEBUG, WARNING, ERROR, CRITICAL
 ```
 
-Or programmatically:
-
-```python
-from api.logging_config import configure_logging
-
-configure_logging(log_level="DEBUG")
-```
-
 ### Log Format
 
 All logs follow a structured format:
@@ -382,109 +271,28 @@ All logs follow a structured format:
 2025-10-23 14:30:15 - themis.api - INFO - Request completed | duration=1234ms
 ```
 
-**Format:** `timestamp - logger - level - message | key=value`
-
 ### Log Categories
 
 #### 1. Request Logs (`themis.api.requests`)
 
-Every HTTP request is logged:
-
 ```
 2025-10-23 14:30:15 - themis.api.requests - INFO - [req-1] POST /orchestrator/execute | client=192.168.1.1
-2025-10-23 14:30:16 - themis.api.requests - INFO - [req-1] POST /orchestrator/execute | status=200 | duration=1234.56ms | client=192.168.1.1
+2025-10-23 14:30:16 - themis.api.requests - INFO - [req-1] POST /orchestrator/execute | status=200 | duration=1234.56ms
 ```
 
 #### 2. Audit Logs (`themis.api.audit`)
 
-Security-relevant events:
-
 ```
-2025-10-23 14:30:15 - themis.api.audit - WARNING - Authentication failed: POST /orchestrator/plan | client=192.168.1.1 | has_auth=false
+2025-10-23 14:30:15 - themis.api.audit - WARNING - Authentication failed: POST /orchestrator/plan | client=192.168.1.1
 2025-10-23 14:30:20 - themis.api.audit - WARNING - Rate limit exceeded: POST /orchestrator/execute | client=192.168.1.1
-2025-10-23 14:30:25 - themis.api.audit - INFO - Authorized action: POST /orchestrator/execute | client=192.168.1.1
 ```
 
-#### 3. Performance Logs (`themis.api.performance`)
-
-Slow requests and cost tracking:
-
-```
-2025-10-23 14:30:16 - themis.api.performance - WARNING - Slow request: POST /orchestrator/execute | duration=5432.10ms | client=192.168.1.1
-2025-10-23 14:30:16 - themis.api.performance - INFO - Execution completed | estimated_cost=$0.0450 | total_cost=$12.34 | total_executions=274
-```
-
-#### 4. Orchestrator Logs (`themis.orchestrator`)
-
-State management and caching:
-
-```
-2025-10-23 14:30:15 - themis.orchestrator - DEBUG - State cache hit (age: 15.23s)
-2025-10-23 14:31:20 - themis.orchestrator - DEBUG - State cache miss - loading from database
-2025-10-23 14:31:20 - themis.orchestrator - DEBUG - Saving state to database
-```
-
-#### 5. Agent Logs (`themis.agents`)
-
-Agent execution:
+#### 3. Agent Logs (`themis.agents`)
 
 ```
 2025-10-23 14:30:15 - themis.agents - INFO - agent_run_start | agent=lda
-2025-10-23 14:30:15 - themis.agents - INFO - agent_tool_invocation | agent=lda | tool=document_parser
 2025-10-23 14:30:16 - themis.agents - INFO - agent_run_complete | agent=lda | duration=1.23 | tool_invocations=2
 ```
-
-#### 6. LLM Client Logs (`themis.llm_client`)
-
-API calls with retry attempts:
-
-```
-2025-10-23 14:30:15 - themis.llm_client - DEBUG - Calling Anthropic API (model: claude-3-5-sonnet-20241022, max_tokens: 4096)
-2025-10-23 14:30:16 - themis.llm_client - DEBUG - Received response from Anthropic API (1234 chars)
-```
-
-### Viewing Logs
-
-**Docker:**
-```bash
-# All logs
-docker-compose logs -f api
-
-# Specific category
-docker-compose logs -f api | grep "themis.api.audit"
-
-# Errors only
-docker-compose logs -f api | grep "ERROR"
-
-# Last 100 lines
-docker-compose logs --tail=100 api
-```
-
-**Save logs to file:**
-```bash
-docker-compose logs api > themis-logs-$(date +%Y%m%d).log
-```
-
-### Log Rotation
-
-For production, use Docker's built-in log rotation:
-
-```yaml
-# docker-compose.yml
-services:
-  api:
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-```
-
-Or use external log management:
-
-- **Datadog:** Add datadog-agent service
-- **CloudWatch:** Use awslogs driver
-- **Elasticsearch:** Use fluentd driver
 
 ---
 
@@ -507,39 +315,30 @@ themis_agent_tool_invocations_total{agent="lda"}
 themis_agent_run_errors_total{agent="lda"}
 ```
 
-### Starting Monitoring Stack
+### Prometheus Configuration
 
-```bash
-# Start with Prometheus + Grafana
-docker-compose --profile monitoring up -d
+Add to your `prometheus.yml`:
 
-# Access Grafana
-open http://localhost:3000
-# Login: admin / (GRAFANA_PASSWORD from .env)
-
-# Access Prometheus
-open http://localhost:9090
+```yaml
+scrape_configs:
+  - job_name: 'themis'
+    static_configs:
+      - targets: ['localhost:8000']
+    metrics_path: '/metrics'
 ```
 
 ### Grafana Dashboards
 
-Import pre-built dashboard (JSON):
-
-1. Go to Grafana → Create → Import
-2. Upload `infra/grafana-dashboards/themis-overview.json`
-3. Select Prometheus data source
-
-**Dashboard Panels:**
+Recommended dashboard panels:
 - Request rate (req/s)
 - Response times (p50, p95, p99)
 - Error rate
 - Agent execution times
-- LLM cost tracking
 - Cache hit rate
 
 ### Alerts
 
-Configure Prometheus alerts in `infra/prometheus.yml`:
+Example Prometheus alert rules:
 
 ```yaml
 groups:
@@ -563,7 +362,6 @@ groups:
 ### Before Deployment
 
 - [ ] Set strong `THEMIS_API_KEY` (32+ characters)
-- [ ] Set strong `POSTGRES_PASSWORD` (16+ characters)
 - [ ] Configure valid `ANTHROPIC_API_KEY`
 - [ ] Set `LOG_LEVEL=WARNING` or `ERROR` (not DEBUG)
 - [ ] Enable HTTPS/TLS (use nginx or cloud load balancer)
@@ -574,51 +372,18 @@ groups:
 - [ ] Test disaster recovery procedure
 - [ ] Document API key rotation process
 - [ ] Configure CORS if needed
-- [ ] Set resource limits (CPU/memory)
 
 ### Security Hardening
 
-```yaml
-# docker-compose.yml production settings
-services:
-  api:
-    deploy:
-      resources:
-        limits:
-          cpus: '2'
-          memory: 2G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
+```bash
+# Production environment variables
+PRODUCTION_MODE=true
+LOG_LEVEL=WARNING
 
-    environment:
-      # Production mode
-      PRODUCTION_MODE: "true"
-      LOG_LEVEL: "WARNING"
-
-      # Secrets from external vault
-      THEMIS_API_KEY: ${THEMIS_API_KEY}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-
-  postgres:
-    # Only expose internally
-    # ports:  # Remove this in production
-    networks:
-      - themis-network
+# Use secrets manager for sensitive values
+THEMIS_API_KEY=${THEMIS_API_KEY}
+ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
 ```
-
-### Monitoring Checklist
-
-- [ ] Prometheus scraping metrics
-- [ ] Grafana dashboards configured
-- [ ] Alerts set up for:
-  - High error rate
-  - Slow requests
-  - High memory usage
-  - Database connection failures
-  - LLM cost threshold
-- [ ] Log aggregation configured
-- [ ] Uptime monitoring (e.g., UptimeRobot)
 
 ### Performance Tuning
 
@@ -626,12 +391,8 @@ services:
 # Adjust cache TTL based on your needs
 CACHE_TTL_SECONDS=120  # Longer = better cache hit rate
 
-# Tune database connections
-# In PostgreSQL config
-max_connections = 100
-
-# Tune uvicorn workers
-uvicorn api.main:app --workers 4 --host 0.0.0.0 --port 8000
+# Tune uvicorn workers (2 * CPU cores + 1)
+uvicorn api.main:app --workers 9 --host 0.0.0.0 --port 8000
 ```
 
 ---
@@ -645,71 +406,38 @@ uvicorn api.main:app --workers 4 --host 0.0.0.0 --port 8000
 # Check cache TTL
 echo $CACHE_TTL_SECONDS
 
-# Force cache invalidation
-docker-compose restart api
+# Force cache invalidation by restarting the service
+sudo systemctl restart themis
 ```
 
 **Issue: High memory usage**
 ```bash
-# Check container stats
-docker stats themis-api
-
 # Reduce cache TTL
 CACHE_TTL_SECONDS=30
 
-# Limit container memory
-docker-compose up -d --scale api=1
+# Monitor memory
+htop
 ```
 
-**Issue: Slow database queries**
-```sql
--- Check database size
-SELECT pg_size_pretty(pg_database_size('themis'));
-
--- Analyze slow queries
-SELECT * FROM pg_stat_statements ORDER BY mean_time DESC LIMIT 10;
-
--- Vacuum and analyze
-VACUUM ANALYZE orchestrator_state;
-```
-
-**Issue: Missing logs**
+**Issue: Slow responses**
 ```bash
-# Check log level
-echo $LOG_LEVEL
+# Check LLM latency
+curl -w "@curl-format.txt" -X POST http://localhost:8000/orchestrator/plan ...
 
-# Temporarily enable DEBUG
-docker-compose exec api env LOG_LEVEL=DEBUG
-
-# Check if logs are being rotated too aggressively
-docker inspect themis-api | grep -A 10 "LogConfig"
+# Enable DEBUG logging temporarily
+LOG_LEVEL=DEBUG
 ```
-
----
-
-## Next Steps
-
-1. ✅ Deploy to staging environment
-2. ✅ Run load tests
-3. ✅ Configure monitoring alerts
-4. ✅ Set up automated backups
-5. ✅ Document runbooks for common issues
-6. ✅ Train team on deployment procedures
-7. ✅ Plan API key rotation schedule
-8. ✅ Deploy to production
 
 ---
 
 ## Support
 
 For issues or questions:
-- Review logs: `docker-compose logs -f api`
 - Check health: `curl http://localhost:8000/health`
-- Review documentation: `IMPROVEMENTS.md`, `THEMIS_CODE_REVIEW.md`
+- Review logs: `journalctl -u themis -f`
+- Review documentation: `docs/IMPROVEMENTS.md`
 - GitHub Issues: https://github.com/themis-agentic-system/themis-framework/issues
 
 ---
 
 **Status:** ✅ **Production Ready**
-
-All three optimizations deployed and tested successfully!

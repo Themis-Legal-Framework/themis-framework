@@ -6,8 +6,6 @@ the root README.  Use the list below to navigate to a relevant guide:
 - **DEPLOYMENT_GUIDE.md** – Comprehensive, step-by-step instructions for deploying Themis in a
   production environment (infrastructure assumptions, secrets management, observability, and
   maintenance playbooks).
-- **DOCKER_README.md** – Notes for building the container image and orchestrating local environments
-  via Docker Compose.
 - **IMPLEMENTATION_SUMMARY.md** – High-level architectural rationale for the orchestrator, agents,
   and supporting tooling.
 - **SECURITY_IMPROVEMENTS.md** – Overview of the security controls baked into the API surface plus a
