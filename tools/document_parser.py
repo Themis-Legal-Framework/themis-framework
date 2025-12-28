@@ -128,7 +128,7 @@ Respond in JSON format:
         "document": title,
         "summary": result.get("summary", "Summary not available."),
         "key_facts": result.get("key_facts", []),
-        "date": document.get("date") or (result.get("dates", [None])[0]),
+        "date": document.get("date") or next(iter(result.get("dates", [])), None),
         "parties_mentioned": result.get("parties_mentioned", []),
     }
 
