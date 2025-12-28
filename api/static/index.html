@@ -3,434 +3,1246 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Themis Legal AI - Multi-Agent Legal Analysis</title>
+    <title>Themis — Legal AI Orchestration</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
-        * {
+        :root {
+            --bg-primary: #09090b;
+            --bg-secondary: #0f0f12;
+            --bg-tertiary: #18181b;
+            --bg-card: #1a1a1f;
+            --bg-card-hover: #222228;
+            --border-subtle: rgba(255, 255, 255, 0.06);
+            --border-accent: rgba(201, 169, 98, 0.3);
+            --text-primary: #fafafa;
+            --text-secondary: rgba(250, 250, 250, 0.7);
+            --text-muted: rgba(250, 250, 250, 0.4);
+            --accent-gold: #c9a962;
+            --accent-gold-dim: rgba(201, 169, 98, 0.15);
+            --accent-gold-glow: rgba(201, 169, 98, 0.4);
+            --success: #22c55e;
+            --error: #ef4444;
+            --warning: #eab308;
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 16px;
+            --font-display: 'Cormorant Garamond', Georgia, serif;
+            --font-body: 'DM Sans', -apple-system, sans-serif;
+            --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        *, *::before, *::after {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
 
+        html {
+            font-size: 16px;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: var(--font-body);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
             min-height: 100vh;
-            padding: 20px;
         }
 
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            overflow: hidden;
+        /* Subtle grid background */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(201, 169, 98, 0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(201, 169, 98, 0.02) 1px, transparent 1px);
+            background-size: 60px 60px;
+            pointer-events: none;
+            z-index: 0;
         }
 
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 40px;
-            text-align: center;
+        /* Layout */
+        .app {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            min-height: 100vh;
+            position: relative;
+            z-index: 1;
         }
 
-        .header h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
+        @media (max-width: 1024px) {
+            .app {
+                grid-template-columns: 1fr;
+            }
         }
 
-        .header p {
-            font-size: 1.1em;
-            opacity: 0.9;
-        }
-
-        .agents {
+        /* Sidebar */
+        .sidebar {
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border-subtle);
+            padding: 32px 24px;
             display: flex;
-            justify-content: space-around;
-            padding: 20px;
-            background: rgba(255,255,255,0.1);
-            margin-top: 20px;
-            flex-wrap: wrap;
-            gap: 10px;
+            flex-direction: column;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
         }
 
-        .agent {
-            text-align: center;
-            padding: 10px;
+        @media (max-width: 1024px) {
+            .sidebar {
+                position: relative;
+                height: auto;
+                border-right: none;
+                border-bottom: 1px solid var(--border-subtle);
+            }
         }
 
-        .agent-icon {
-            font-size: 2em;
-            margin-bottom: 5px;
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 48px;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--accent-gold) 0%, #8b7355 100%);
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .logo-text {
+            font-family: var(--font-display);
+            font-size: 1.75rem;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            color: var(--text-primary);
+        }
+
+        .logo-sub {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            margin-top: 2px;
+        }
+
+        /* Agent Cards */
+        .agents-section {
+            flex: 1;
+        }
+
+        .section-label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+            padding-left: 2px;
+        }
+
+        .agent-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .agent-card {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 14px 16px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            transition: all var(--transition-smooth);
+            cursor: default;
+        }
+
+        .agent-card:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--border-accent);
+        }
+
+        .agent-card.active {
+            border-color: var(--accent-gold);
+            box-shadow: 0 0 20px var(--accent-gold-dim);
+        }
+
+        .agent-indicator {
+            width: 36px;
+            height: 36px;
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            position: relative;
+        }
+
+        .agent-indicator::after {
+            content: '';
+            position: absolute;
+            inset: -2px;
+            border-radius: inherit;
+            opacity: 0;
+            transition: opacity var(--transition-smooth);
+        }
+
+        .agent-card.active .agent-indicator::after {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0; box-shadow: 0 0 0 0 var(--accent-gold-glow); }
+            50% { opacity: 1; box-shadow: 0 0 0 4px var(--accent-gold-glow); }
+        }
+
+        .agent-lda .agent-indicator { background: rgba(59, 130, 246, 0.15); }
+        .agent-dea .agent-indicator { background: rgba(168, 85, 247, 0.15); }
+        .agent-lsa .agent-indicator { background: rgba(34, 197, 94, 0.15); }
+        .agent-dda .agent-indicator { background: rgba(249, 115, 22, 0.15); }
+
+        .agent-info {
+            flex: 1;
+            min-width: 0;
         }
 
         .agent-name {
-            font-size: 0.9em;
-            font-weight: bold;
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: var(--text-primary);
+            margin-bottom: 2px;
         }
 
-        .content {
-            padding: 40px;
+        .agent-role {
+            font-size: 0.75rem;
+            color: var(--text-muted);
         }
 
-        .section {
-            margin-bottom: 30px;
+        .agent-status {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-muted);
+            transition: all var(--transition-smooth);
         }
 
-        .section h2 {
-            color: #667eea;
-            margin-bottom: 15px;
-            font-size: 1.5em;
+        .agent-card.active .agent-status {
+            background: var(--success);
+            box-shadow: 0 0 8px var(--success);
         }
 
-        .info-box {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 8px;
+        /* Sidebar Footer */
+        .sidebar-footer {
+            margin-top: auto;
+            padding-top: 24px;
+            border-top: 1px solid var(--border-subtle);
+        }
+
+        .nav-links {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.875rem;
+            border-radius: var(--radius-sm);
+            transition: all var(--transition-fast);
+        }
+
+        .nav-link:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .nav-link-icon {
+            font-size: 14px;
+            opacity: 0.7;
+        }
+
+        /* Main Content */
+        .main {
+            padding: 48px;
+            max-width: 900px;
+        }
+
+        @media (max-width: 768px) {
+            .main {
+                padding: 24px;
+            }
+        }
+
+        .page-header {
+            margin-bottom: 48px;
+        }
+
+        .page-title {
+            font-family: var(--font-display);
+            font-size: 2.5rem;
+            font-weight: 500;
+            letter-spacing: -0.03em;
+            color: var(--text-primary);
+            margin-bottom: 12px;
+        }
+
+        .page-subtitle {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            max-width: 500px;
+        }
+
+        /* Form Sections */
+        .form-section {
+            margin-bottom: 40px;
+        }
+
+        .form-section-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
             margin-bottom: 20px;
-            border-left: 4px solid #667eea;
+        }
+
+        .form-section-icon {
+            width: 28px;
+            height: 28px;
+            background: var(--accent-gold-dim);
+            border: 1px solid var(--border-accent);
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+        }
+
+        .form-section-title {
+            font-family: var(--font-display);
+            font-size: 1.25rem;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .form-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 28px;
+        }
+
+        /* Form Elements */
+        .form-grid {
+            display: grid;
+            gap: 20px;
+        }
+
+        .form-grid-2 {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .form-grid-3 {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+
+        @media (max-width: 640px) {
+            .form-grid-2, .form-grid-3 {
+                grid-template-columns: 1fr;
+            }
         }
 
         .form-group {
-            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
         }
 
-        label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #333;
+        .form-label {
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
 
-        .required {
-            color: #e74c3c;
+        .required-dot {
+            width: 5px;
+            height: 5px;
+            background: var(--accent-gold);
+            border-radius: 50%;
         }
 
-        input[type="text"],
-        input[type="number"],
-        textarea,
-        select {
+        .form-input,
+        .form-textarea,
+        .form-select {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 12px 16px;
+            font-family: inherit;
+            font-size: 0.9375rem;
+            color: var(--text-primary);
+            transition: all var(--transition-fast);
             width: 100%;
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 6px;
-            font-size: 1em;
-            transition: border-color 0.3s;
         }
 
-        input[type="text"]:focus,
-        input[type="number"]:focus,
-        textarea:focus,
-        select:focus {
+        .form-input::placeholder,
+        .form-textarea::placeholder {
+            color: var(--text-muted);
+        }
+
+        .form-input:hover,
+        .form-textarea:hover,
+        .form-select:hover {
+            border-color: rgba(255, 255, 255, 0.12);
+        }
+
+        .form-input:focus,
+        .form-textarea:focus,
+        .form-select:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: var(--accent-gold);
+            box-shadow: 0 0 0 3px var(--accent-gold-dim);
         }
 
-        textarea {
+        .form-textarea {
+            min-height: 120px;
             resize: vertical;
-            min-height: 100px;
+            line-height: 1.6;
         }
 
-        .file-upload {
-            border: 2px dashed #667eea;
-            border-radius: 6px;
-            padding: 30px;
+        .form-select {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 14px center;
+            padding-right: 44px;
+            cursor: pointer;
+        }
+
+        .form-select option {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+
+        .form-hint {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* File Upload */
+        .file-upload-zone {
+            border: 1px dashed var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 32px;
             text-align: center;
             cursor: pointer;
-            transition: background-color 0.3s;
+            transition: all var(--transition-smooth);
+            background: var(--bg-secondary);
         }
 
-        .file-upload:hover {
-            background-color: #f8f9fa;
+        .file-upload-zone:hover {
+            border-color: var(--accent-gold);
+            background: var(--accent-gold-dim);
+        }
+
+        .file-upload-zone.dragover {
+            border-color: var(--accent-gold);
+            background: var(--accent-gold-dim);
         }
 
         .file-upload-icon {
-            font-size: 3em;
-            color: #667eea;
-            margin-bottom: 10px;
+            font-size: 28px;
+            margin-bottom: 12px;
+            opacity: 0.6;
+        }
+
+        .file-upload-text {
+            font-size: 0.9375rem;
+            color: var(--text-secondary);
+        }
+
+        .file-upload-text strong {
+            color: var(--accent-gold);
+        }
+
+        .file-upload-hint {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 8px;
         }
 
         .file-list {
-            margin-top: 15px;
+            margin-top: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
         }
 
         .file-item {
-            background: #f8f9fa;
-            padding: 10px;
-            border-radius: 6px;
-            margin-bottom: 8px;
             display: flex;
-            justify-content: space-between;
             align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
         }
 
-        .remove-file {
-            background: #e74c3c;
-            color: white;
-            border: none;
-            padding: 5px 10px;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-
-        .btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 15px 40px;
-            font-size: 1.1em;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: transform 0.2s;
-            width: 100%;
-            font-weight: 600;
-        }
-
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-
-        .links {
+        .file-item-info {
             display: flex;
-            gap: 20px;
-            justify-content: center;
-            margin-top: 20px;
-            padding: 20px;
-            background: #f8f9fa;
-        }
-
-        .links a {
-            color: #667eea;
-            text-decoration: none;
-            font-weight: 600;
-        }
-
-        .links a:hover {
-            text-decoration: underline;
-        }
-
-        .party-list {
-            margin-top: 10px;
-        }
-
-        .party-item {
-            display: flex;
+            align-items: center;
             gap: 10px;
-            margin-bottom: 10px;
+            font-size: 0.875rem;
         }
 
-        .add-party {
-            background: #667eea;
-            color: white;
+        .file-item-icon {
+            opacity: 0.6;
+        }
+
+        .file-item-size {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+        }
+
+        .file-remove {
+            background: transparent;
             border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
+            color: var(--text-muted);
             cursor: pointer;
-            margin-top: 10px;
+            padding: 4px 8px;
+            font-size: 0.75rem;
+            transition: color var(--transition-fast);
         }
 
-        .result {
-            margin-top: 20px;
-            padding: 20px;
-            border-radius: 8px;
+        .file-remove:hover {
+            color: var(--error);
+        }
+
+        /* Submit Button */
+        .submit-section {
+            margin-top: 40px;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 16px 32px;
+            background: linear-gradient(135deg, var(--accent-gold) 0%, #a88a4a 100%);
+            border: none;
+            border-radius: var(--radius-md);
+            font-family: inherit;
+            font-size: 1rem;
+            font-weight: 600;
+            color: #0a0a0b;
+            cursor: pointer;
+            transition: all var(--transition-smooth);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px var(--accent-gold-glow);
+        }
+
+        .submit-btn:active {
+            transform: translateY(0);
+        }
+
+        .submit-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Loading State */
+        .loading-overlay {
             display: none;
-        }
-
-        .result.success {
-            background: #d4edda;
-            border: 1px solid #c3e6cb;
-            color: #155724;
-        }
-
-        .result.error {
-            background: #f8d7da;
-            border: 1px solid #f5c6cb;
-            color: #721c24;
-        }
-
-        .loading {
+            margin-top: 32px;
+            padding: 32px;
             text-align: center;
-            padding: 20px;
-            display: none;
         }
 
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
+        .loading-overlay.visible {
+            display: block;
+        }
+
+        .loading-spinner {
+            width: 48px;
+            height: 48px;
+            border: 2px solid var(--border-subtle);
+            border-top-color: var(--accent-gold);
             border-radius: 50%;
-            width: 40px;
-            height: 40px;
             animation: spin 1s linear infinite;
-            margin: 0 auto 10px;
+            margin: 0 auto 20px;
         }
 
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            font-size: 0.9375rem;
+            color: var(--text-secondary);
+        }
+
+        .loading-agents {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 16px;
+        }
+
+        .loading-agent-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-muted);
+            animation: loadingPulse 1.5s ease-in-out infinite;
+        }
+
+        .loading-agent-dot:nth-child(1) { animation-delay: 0s; background: rgba(59, 130, 246, 0.6); }
+        .loading-agent-dot:nth-child(2) { animation-delay: 0.2s; background: rgba(168, 85, 247, 0.6); }
+        .loading-agent-dot:nth-child(3) { animation-delay: 0.4s; background: rgba(34, 197, 94, 0.6); }
+        .loading-agent-dot:nth-child(4) { animation-delay: 0.6s; background: rgba(249, 115, 22, 0.6); }
+
+        @keyframes loadingPulse {
+            0%, 100% { transform: scale(1); opacity: 0.4; }
+            50% { transform: scale(1.5); opacity: 1; }
+        }
+
+        /* Results */
+        .result-container {
+            display: none;
+            margin-top: 32px;
+        }
+
+        .result-container.visible {
+            display: block;
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .result-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+        }
+
+        .result-header {
+            padding: 24px 28px;
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .result-header.success {
+            border-left: 3px solid var(--success);
+        }
+
+        .result-header.error {
+            border-left: 3px solid var(--error);
+        }
+
+        .result-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .result-header.success .result-icon {
+            background: rgba(34, 197, 94, 0.15);
+        }
+
+        .result-header.error .result-icon {
+            background: rgba(239, 68, 68, 0.15);
+        }
+
+        .result-title {
+            font-family: var(--font-display);
+            font-size: 1.25rem;
+            font-weight: 500;
+        }
+
+        .result-body {
+            padding: 28px;
+        }
+
+        /* Document Output */
+        .document-output {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 28px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.875rem;
+            line-height: 1.8;
+            white-space: pre-wrap;
+            max-height: 500px;
+            overflow-y: auto;
+            color: var(--text-secondary);
+        }
+
+        .document-output::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .document-output::-webkit-scrollbar-track {
+            background: var(--bg-tertiary);
+        }
+
+        .document-output::-webkit-scrollbar-thumb {
+            background: var(--border-subtle);
+            border-radius: 4px;
+        }
+
+        /* Analysis Results */
+        .analysis-section {
+            padding: 24px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .analysis-section:last-child {
+            border-bottom: none;
+        }
+
+        .analysis-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .analysis-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+
+        .analysis-lda .analysis-icon { background: rgba(59, 130, 246, 0.15); }
+        .analysis-dea .analysis-icon { background: rgba(168, 85, 247, 0.15); }
+        .analysis-lsa .analysis-icon { background: rgba(34, 197, 94, 0.15); }
+
+        .analysis-title {
+            font-weight: 600;
+            font-size: 0.9375rem;
+        }
+
+        .analysis-content {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .analysis-list {
+            list-style: none;
+            margin-top: 12px;
+        }
+
+        .analysis-list li {
+            padding: 8px 0;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .analysis-list li::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 14px;
+            width: 6px;
+            height: 6px;
+            background: var(--accent-gold);
+            border-radius: 50%;
+        }
+
+        /* Warnings */
+        .warning-banner {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 16px 20px;
+            background: rgba(234, 179, 8, 0.1);
+            border: 1px solid rgba(234, 179, 8, 0.2);
+            border-radius: var(--radius-md);
+            margin-top: 20px;
+        }
+
+        .warning-icon {
+            font-size: 16px;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .warning-text {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .warning-text strong {
+            color: var(--warning);
+        }
+
+        /* Details/Summary */
+        .details-toggle {
+            margin-top: 20px;
+        }
+
+        .details-toggle summary {
+            cursor: pointer;
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            padding: 12px 0;
+            list-style: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .details-toggle summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .details-toggle summary::before {
+            content: '›';
+            font-size: 1.25rem;
+            transition: transform var(--transition-fast);
+        }
+
+        .details-toggle[open] summary::before {
+            transform: rotate(90deg);
+        }
+
+        .details-content {
+            background: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            margin-top: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.75rem;
+            line-height: 1.6;
+            max-height: 400px;
+            overflow: auto;
+            color: var(--text-muted);
+        }
+
+        /* Strength Badge */
+        .strength-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-left: 8px;
+        }
+
+        .strength-strong {
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--success);
+        }
+
+        .strength-moderate {
+            background: rgba(234, 179, 8, 0.15);
+            color: var(--warning);
+        }
+
+        .strength-weak {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--error);
+        }
+
+        /* Utility */
+        .hidden {
+            display: none !important;
+        }
+
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>⚖️ Themis Legal AI</h1>
-            <p>Multi-Agent Legal Analysis & Workflow Orchestration</p>
-            <div class="agents">
-                <div class="agent">
-                    <div class="agent-icon">📊</div>
-                    <div class="agent-name">LDA</div>
-                    <div style="font-size: 0.8em; opacity: 0.8;">Data Analyst</div>
-                </div>
-                <div class="agent">
-                    <div class="agent-icon">⚖️</div>
-                    <div class="agent-name">DEA</div>
-                    <div style="font-size: 0.8em; opacity: 0.8;">Legal Expert</div>
-                </div>
-                <div class="agent">
-                    <div class="agent-icon">🎯</div>
-                    <div class="agent-name">LSA</div>
-                    <div style="font-size: 0.8em; opacity: 0.8;">Strategist</div>
-                </div>
-                <div class="agent">
-                    <div class="agent-icon">📝</div>
-                    <div class="agent-name">DDA</div>
-                    <div style="font-size: 0.8em; opacity: 0.8;">Document Drafter</div>
+    <div class="app">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <div class="logo-icon">⚖</div>
+                <div>
+                    <div class="logo-text">Themis</div>
+                    <div class="logo-sub">Legal AI</div>
                 </div>
             </div>
-        </div>
 
-        <div class="content">
-            <div class="info-box">
-                <strong>How Themis Works:</strong> Upload your legal documents and provide case details. Our AI agents will collaborate to analyze facts, apply legal doctrines, develop strategy, and draft documents - all ready for attorney review.
+            <div class="agents-section">
+                <div class="section-label">Agent Network</div>
+                <div class="agent-grid">
+                    <div class="agent-card agent-lda" id="agent-lda">
+                        <div class="agent-indicator">📊</div>
+                        <div class="agent-info">
+                            <div class="agent-name">LDA</div>
+                            <div class="agent-role">Data Analyst</div>
+                        </div>
+                        <div class="agent-status"></div>
+                    </div>
+                    <div class="agent-card agent-dea" id="agent-dea">
+                        <div class="agent-indicator">⚖️</div>
+                        <div class="agent-info">
+                            <div class="agent-name">DEA</div>
+                            <div class="agent-role">Legal Expert</div>
+                        </div>
+                        <div class="agent-status"></div>
+                    </div>
+                    <div class="agent-card agent-lsa" id="agent-lsa">
+                        <div class="agent-indicator">🎯</div>
+                        <div class="agent-info">
+                            <div class="agent-name">LSA</div>
+                            <div class="agent-role">Strategist</div>
+                        </div>
+                        <div class="agent-status"></div>
+                    </div>
+                    <div class="agent-card agent-dda" id="agent-dda">
+                        <div class="agent-indicator">✍️</div>
+                        <div class="agent-info">
+                            <div class="agent-name">DDA</div>
+                            <div class="agent-role">Document Drafter</div>
+                        </div>
+                        <div class="agent-status"></div>
+                    </div>
+                </div>
             </div>
+
+            <div class="sidebar-footer">
+                <nav class="nav-links">
+                    <a href="/docs" class="nav-link" target="_blank">
+                        <span class="nav-link-icon">📖</span>
+                        API Documentation
+                    </a>
+                    <a href="/redoc" class="nav-link" target="_blank">
+                        <span class="nav-link-icon">📘</span>
+                        API Reference
+                    </a>
+                    <a href="/health" class="nav-link" target="_blank">
+                        <span class="nav-link-icon">💚</span>
+                        System Health
+                    </a>
+                </nav>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main">
+            <header class="page-header">
+                <h1 class="page-title">New Matter</h1>
+                <p class="page-subtitle">Upload your case documents and let our AI agents collaborate on analysis, strategy, and drafting.</p>
+            </header>
 
             <form id="matterForm">
-                <div class="section">
-                    <h2>📋 Case Information</h2>
-
-                    <div class="form-group">
-                        <label>Case Summary <span class="required">*</span></label>
-                        <textarea id="summary" name="summary" required placeholder="Brief description of the case (minimum 10 characters)"></textarea>
+                <!-- Case Information -->
+                <section class="form-section">
+                    <div class="form-section-header">
+                        <div class="form-section-icon">📋</div>
+                        <h2 class="form-section-title">Case Information</h2>
                     </div>
-
-                    <div class="form-group">
-                        <label>Jurisdiction</label>
-                        <input type="text" id="jurisdiction" name="jurisdiction" placeholder="e.g., California, New York, or C.D. Cal.">
-                    </div>
-
-                    <div class="form-group">
-                        <label>Cause of Action</label>
-                        <input type="text" id="cause_of_action" name="cause_of_action" placeholder="e.g., Personal Injury - Motor Vehicle Accident">
-                    </div>
-
-                    <div class="form-group">
-                        <label>Document Type <span class="required">*</span></label>
-                        <select id="document_type" name="document_type" required>
-                            <option value="complaint" selected>Complaint</option>
-                            <option value="demand_letter">Demand Letter</option>
-                            <option value="motion">Motion</option>
-                            <option value="memorandum">Memorandum</option>
-                        </select>
-                        <div style="font-size: 0.85em; color: #666; margin-top: 5px;">
-                            Choose the type of legal document you want Themis to draft
+                    <div class="form-card">
+                        <div class="form-grid">
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label class="form-label">
+                                    Case Summary
+                                    <span class="required-dot"></span>
+                                </label>
+                                <textarea
+                                    class="form-textarea"
+                                    id="summary"
+                                    name="summary"
+                                    required
+                                    placeholder="Describe the case briefly. Include key facts, parties involved, and the nature of the dispute."
+                                ></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Jurisdiction</label>
+                                <input
+                                    type="text"
+                                    class="form-input"
+                                    id="jurisdiction"
+                                    name="jurisdiction"
+                                    placeholder="e.g., California, N.D. Cal."
+                                >
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Cause of Action</label>
+                                <input
+                                    type="text"
+                                    class="form-input"
+                                    id="cause_of_action"
+                                    name="cause_of_action"
+                                    placeholder="e.g., Personal Injury"
+                                >
+                            </div>
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label class="form-label">
+                                    Document Type
+                                    <span class="required-dot"></span>
+                                </label>
+                                <select class="form-select" id="document_type" name="document_type" required>
+                                    <option value="complaint">Complaint</option>
+                                    <option value="demand_letter">Demand Letter</option>
+                                    <option value="motion">Motion</option>
+                                    <option value="memorandum">Memorandum</option>
+                                </select>
+                                <p class="form-hint">The type of legal document Themis will draft</p>
+                            </div>
                         </div>
                     </div>
-                </div>
+                </section>
 
-                <div class="section">
-                    <h2>👥 Parties</h2>
-                    <div class="form-group">
-                        <label>Plaintiff Name <span class="required">*</span></label>
-                        <input type="text" id="plaintiff_name" name="plaintiff_name" required placeholder="Name of plaintiff">
+                <!-- Parties -->
+                <section class="form-section">
+                    <div class="form-section-header">
+                        <div class="form-section-icon">👥</div>
+                        <h2 class="form-section-title">Parties</h2>
                     </div>
-                    <div class="form-group">
-                        <label>Defendant Name <span class="required">*</span></label>
-                        <input type="text" id="defendant_name" name="defendant_name" required placeholder="Name of defendant">
-                    </div>
-                    <div class="form-group">
-                        <label>Party We Represent <span class="required">*</span></label>
-                        <select id="party_represented" name="party_represented" required>
-                            <option value="">-- Select --</option>
-                            <option value="plaintiff">Plaintiff</option>
-                            <option value="defendant">Defendant</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="section">
-                    <h2>📄 Documents</h2>
-                    <div class="file-upload" onclick="document.getElementById('fileInput').click()">
-                        <div class="file-upload-icon">📁</div>
-                        <div><strong>Click to upload documents</strong></div>
-                        <div style="color: #666; margin-top: 5px;">PDF, DOCX, TXT files supported</div>
-                    </div>
-                    <input type="file" id="fileInput" multiple accept=".pdf,.docx,.txt,.doc" style="display: none;" onchange="handleFiles(this.files)">
-                    <div id="fileList" class="file-list"></div>
-
-                    <div class="form-group" style="margin-top: 20px;">
-                        <label>Or describe documents manually:</label>
-                        <textarea id="document_description" name="document_description" placeholder="Describe available documents and key facts they contain"></textarea>
-                    </div>
-                </div>
-
-                <div class="section">
-                    <h2>💰 Damages (Optional)</h2>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
-                        <div class="form-group">
-                            <label>Special Damages ($)</label>
-                            <input type="number" id="specials" name="specials" min="0" step="0.01" placeholder="0.00">
-                        </div>
-                        <div class="form-group">
-                            <label>General Damages ($)</label>
-                            <input type="number" id="generals" name="generals" min="0" step="0.01" placeholder="0.00">
-                        </div>
-                        <div class="form-group">
-                            <label>Punitive Damages ($)</label>
-                            <input type="number" id="punitive" name="punitive" min="0" step="0.01" placeholder="0.00">
+                    <div class="form-card">
+                        <div class="form-grid form-grid-2">
+                            <div class="form-group">
+                                <label class="form-label">
+                                    Plaintiff Name
+                                    <span class="required-dot"></span>
+                                </label>
+                                <input
+                                    type="text"
+                                    class="form-input"
+                                    id="plaintiff_name"
+                                    name="plaintiff_name"
+                                    required
+                                    placeholder="Full legal name"
+                                >
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">
+                                    Defendant Name
+                                    <span class="required-dot"></span>
+                                </label>
+                                <input
+                                    type="text"
+                                    class="form-input"
+                                    id="defendant_name"
+                                    name="defendant_name"
+                                    required
+                                    placeholder="Full legal name"
+                                >
+                            </div>
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label class="form-label">
+                                    Party We Represent
+                                    <span class="required-dot"></span>
+                                </label>
+                                <select class="form-select" id="party_represented" name="party_represented" required>
+                                    <option value="">Select party...</option>
+                                    <option value="plaintiff">Plaintiff</option>
+                                    <option value="defendant">Defendant</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
+                </section>
+
+                <!-- Documents -->
+                <section class="form-section">
+                    <div class="form-section-header">
+                        <div class="form-section-icon">📄</div>
+                        <h2 class="form-section-title">Documents</h2>
+                    </div>
+                    <div class="form-card">
+                        <div
+                            class="file-upload-zone"
+                            id="dropZone"
+                            onclick="document.getElementById('fileInput').click()"
+                        >
+                            <div class="file-upload-icon">📁</div>
+                            <p class="file-upload-text">
+                                <strong>Click to upload</strong> or drag and drop
+                            </p>
+                            <p class="file-upload-hint">PDF, DOCX, TXT up to 10MB</p>
+                        </div>
+                        <input
+                            type="file"
+                            id="fileInput"
+                            multiple
+                            accept=".pdf,.docx,.txt,.doc"
+                            style="display: none;"
+                            onchange="handleFiles(this.files)"
+                        >
+                        <div id="fileList" class="file-list"></div>
+
+                        <div class="form-group" style="margin-top: 20px;">
+                            <label class="form-label">Or describe documents manually</label>
+                            <textarea
+                                class="form-textarea"
+                                id="document_description"
+                                name="document_description"
+                                placeholder="Describe the documents and key facts they contain..."
+                                style="min-height: 80px;"
+                            ></textarea>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Damages -->
+                <section class="form-section">
+                    <div class="form-section-header">
+                        <div class="form-section-icon">💰</div>
+                        <h2 class="form-section-title">Damages</h2>
+                    </div>
+                    <div class="form-card">
+                        <div class="form-grid form-grid-3">
+                            <div class="form-group">
+                                <label class="form-label">Special Damages</label>
+                                <input
+                                    type="number"
+                                    class="form-input"
+                                    id="specials"
+                                    name="specials"
+                                    min="0"
+                                    step="0.01"
+                                    placeholder="$0.00"
+                                >
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">General Damages</label>
+                                <input
+                                    type="number"
+                                    class="form-input"
+                                    id="generals"
+                                    name="generals"
+                                    min="0"
+                                    step="0.01"
+                                    placeholder="$0.00"
+                                >
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Punitive Damages</label>
+                                <input
+                                    type="number"
+                                    class="form-input"
+                                    id="punitive"
+                                    name="punitive"
+                                    min="0"
+                                    step="0.01"
+                                    placeholder="$0.00"
+                                >
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Submit -->
+                <div class="submit-section">
+                    <button type="submit" class="submit-btn" id="submitBtn">
+                        <span>Submit to Themis</span>
+                        <span>→</span>
+                    </button>
                 </div>
-
-                <div class="loading" id="loading">
-                    <div class="spinner"></div>
-                    <p>Themis agents are analyzing your matter...</p>
-                </div>
-
-                <div id="result" class="result"></div>
-
-                <button type="submit" class="btn" id="submitBtn">🚀 Submit to Themis</button>
             </form>
 
-            <div class="links">
-                <a href="/docs" target="_blank">📖 API Documentation</a>
-                <a href="/redoc" target="_blank">📘 API Reference</a>
-                <a href="/health" target="_blank">💚 System Health</a>
+            <!-- Loading State -->
+            <div class="loading-overlay" id="loading">
+                <div class="loading-spinner"></div>
+                <p class="loading-text">Agents are analyzing your matter...</p>
+                <div class="loading-agents">
+                    <div class="loading-agent-dot"></div>
+                    <div class="loading-agent-dot"></div>
+                    <div class="loading-agent-dot"></div>
+                    <div class="loading-agent-dot"></div>
+                </div>
             </div>
-        </div>
+
+            <!-- Results -->
+            <div class="result-container" id="resultContainer">
+                <div class="result-card" id="resultCard">
+                    <!-- Populated by JavaScript -->
+                </div>
+            </div>
+        </main>
     </div>
 
     <script>
         let uploadedFiles = [];
 
-        function handleFiles(files) {
-            const fileList = document.getElementById('fileList');
+        // Drag and drop handling
+        const dropZone = document.getElementById('dropZone');
 
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => dropZone.classList.add('dragover'), false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'), false);
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            const files = e.dataTransfer.files;
+            handleFiles(files);
+        });
+
+        function handleFiles(files) {
             for (let file of files) {
                 uploadedFiles.push(file);
-                const fileItem = document.createElement('div');
-                fileItem.className = 'file-item';
-                fileItem.innerHTML = `
-                    <span>📎 ${file.name} (${formatFileSize(file.size)})</span>
-                    <button type="button" class="remove-file" onclick="removeFile('${file.name}')">Remove</button>
-                `;
-                fileList.appendChild(fileItem);
             }
+            updateFileList();
         }
 
         function removeFile(fileName) {
@@ -441,12 +1253,17 @@
         function updateFileList() {
             const fileList = document.getElementById('fileList');
             fileList.innerHTML = '';
+
             uploadedFiles.forEach(file => {
                 const fileItem = document.createElement('div');
                 fileItem.className = 'file-item';
                 fileItem.innerHTML = `
-                    <span>📎 ${file.name} (${formatFileSize(file.size)})</span>
-                    <button type="button" class="remove-file" onclick="removeFile('${file.name}')">Remove</button>
+                    <div class="file-item-info">
+                        <span class="file-item-icon">📎</span>
+                        <span>${escapeHtml(file.name)}</span>
+                        <span class="file-item-size">${formatFileSize(file.size)}</span>
+                    </div>
+                    <button type="button" class="file-remove" onclick="removeFile('${escapeHtml(file.name)}')">Remove</button>
                 `;
                 fileList.appendChild(fileItem);
             });
@@ -458,191 +1275,6 @@
             return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
         }
 
-        function formatAnalysisResults(data) {
-            let html = '<h3>✅ Analysis Complete!</h3>';
-            html += '<p style="margin-bottom: 20px;">Themis agents have analyzed your case. Here are the key findings:</p>';
-
-            // Extract artifacts from the response
-            const artifacts = data.artifacts || {};
-
-            // LDA (Legal Data Analyst) - Facts and Timeline
-            if (artifacts.lda?.facts) {
-                const facts = artifacts.lda.facts;
-
-                html += '<div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #667eea;">';
-                html += '<h4 style="color: #667eea; margin-bottom: 10px;">📊 Case Facts (LDA)</h4>';
-
-                if (facts.matter_overview) {
-                    html += `<p style="margin-bottom: 10px;"><strong>Overview:</strong> ${escapeHtml(facts.matter_overview)}</p>`;
-                }
-
-                if (facts.fact_pattern_summary && facts.fact_pattern_summary.length > 0) {
-                    html += '<p style="margin-bottom: 5px;"><strong>Key Facts:</strong></p>';
-                    html += '<ul style="margin-left: 20px; margin-bottom: 10px;">';
-                    facts.fact_pattern_summary.slice(0, 5).forEach(fact => {
-                        html += `<li>${escapeHtml(fact)}</li>`;
-                    });
-                    if (facts.fact_pattern_summary.length > 5) {
-                        html += `<li><em>... and ${facts.fact_pattern_summary.length - 5} more facts</em></li>`;
-                    }
-                    html += '</ul>';
-                }
-
-                if (facts.damages_analysis) {
-                    const damages = facts.damages_analysis;
-                    html += '<p style="margin-bottom: 5px;"><strong>Damages Analysis:</strong></p>';
-                    html += '<ul style="margin-left: 20px;">';
-                    if (damages.economic_damages != null) {
-                        html += `<li>Economic Damages: $${damages.economic_damages.toLocaleString()}</li>`;
-                    }
-                    if (damages.non_economic_damages != null) {
-                        html += `<li>Non-Economic Damages: $${damages.non_economic_damages.toLocaleString()}</li>`;
-                    }
-                    if (damages.total_damages != null) {
-                        html += `<li><strong>Total Estimated: $${damages.total_damages.toLocaleString()}</strong></li>`;
-                    }
-                    if (damages.settlement_range && damages.settlement_range.minimum != null && damages.settlement_range.maximum != null) {
-                        html += `<li>Settlement Range: $${damages.settlement_range.minimum.toLocaleString()} - $${damages.settlement_range.maximum.toLocaleString()}</li>`;
-                    }
-                    html += '</ul>';
-                }
-
-                html += '</div>';
-            }
-
-            // DEA (Doctrinal Expert Agent) - Legal Analysis
-            if (artifacts.dea?.legal_analysis) {
-                const dea = artifacts.dea;
-                const legal_analysis = dea.legal_analysis;
-
-                html += '<div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #764ba2;">';
-                html += '<h4 style="color: #764ba2; margin-bottom: 10px;">⚖️ Legal Analysis (DEA)</h4>';
-
-                // Display legal analysis summary if available
-                if (legal_analysis.analysis) {
-                    html += `<p style="margin-bottom: 15px;">${escapeHtml(legal_analysis.analysis.substring(0, 500))}${legal_analysis.analysis.length > 500 ? '...' : ''}</p>`;
-                }
-
-                // Display identified legal issues
-                if (legal_analysis.issues && legal_analysis.issues.length > 0) {
-                    html += '<p style="margin-bottom: 5px;"><strong>Identified Legal Issues:</strong></p>';
-                    html += '<ul style="margin-left: 20px; margin-bottom: 10px;">';
-                    legal_analysis.issues.forEach(issue => {
-                        if (typeof issue === 'string') {
-                            html += `<li>${escapeHtml(issue)}</li>`;
-                        } else if (issue.issue) {
-                            html += `<li><strong>${escapeHtml(issue.issue)}</strong>`;
-                            if (issue.strength) {
-                                const strengthColor = issue.strength === 'strong' ? '#28a745' :
-                                                     issue.strength === 'moderate' ? '#ffc107' : '#dc3545';
-                                html += ` <span style="color: ${strengthColor}; font-size: 0.85em;">(${escapeHtml(issue.strength)})</span>`;
-                            }
-                            if (issue.area_of_law) {
-                                html += `<br><span style="color: #666; font-size: 0.9em;">Area: ${escapeHtml(issue.area_of_law)}</span>`;
-                            }
-                            html += '</li>';
-                        }
-                    });
-                    html += '</ul>';
-                }
-
-                // Display authorities
-                if (dea.authorities?.controlling_authorities && dea.authorities.controlling_authorities.length > 0) {
-                    const nonPlaceholder = dea.authorities.controlling_authorities.filter(auth =>
-                        !auth.includes('Secondary research required')
-                    );
-                    if (nonPlaceholder.length > 0) {
-                        html += '<p style="margin-bottom: 5px;"><strong>Legal Authorities:</strong></p>';
-                        html += '<ul style="margin-left: 20px;">';
-                        nonPlaceholder.slice(0, 3).forEach(auth => {
-                            html += `<li style="font-size: 0.9em;">${escapeHtml(auth)}</li>`;
-                        });
-                        if (nonPlaceholder.length > 3) {
-                            html += `<li style="font-size: 0.9em;"><em>... and ${nonPlaceholder.length - 3} more authorities</em></li>`;
-                        }
-                        html += '</ul>';
-                    }
-                }
-
-                html += '</div>';
-            }
-
-            // LSA (Legal Strategy Agent) - Strategy
-            if (artifacts.lsa) {
-                const lsa = artifacts.lsa;
-
-                html += '<div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #28a745;">';
-                html += '<h4 style="color: #28a745; margin-bottom: 10px;">🎯 Strategic Recommendations (LSA)</h4>';
-
-                // Display client-safe summary from draft
-                if (lsa.draft?.client_safe_summary) {
-                    html += `<p style="margin-bottom: 15px;"><strong>Assessment:</strong> ${escapeHtml(lsa.draft.client_safe_summary)}</p>`;
-                }
-
-                // Display recommended actions from strategy
-                if (lsa.strategy?.recommended_actions && lsa.strategy.recommended_actions.length > 0) {
-                    html += '<p style="margin-bottom: 5px;"><strong>Recommended Actions:</strong></p>';
-                    html += '<ul style="margin-left: 20px; margin-bottom: 10px;">';
-                    lsa.strategy.recommended_actions.slice(0, 5).forEach(action => {
-                        html += `<li>${escapeHtml(action)}</li>`;
-                    });
-                    if (lsa.strategy.recommended_actions.length > 5) {
-                        html += `<li><em>... and ${lsa.strategy.recommended_actions.length - 5} more actions</em></li>`;
-                    }
-                    html += '</ul>';
-                }
-
-                // Display negotiation positions
-                if (lsa.strategy?.negotiation_positions) {
-                    const positions = lsa.strategy.negotiation_positions;
-                    html += '<p style="margin-bottom: 5px;"><strong>Settlement Strategy:</strong></p>';
-                    html += '<ul style="margin-left: 20px; margin-bottom: 10px;">';
-                    if (positions.initial_demand) {
-                        html += `<li>Initial Demand: ${escapeHtml(positions.initial_demand)}</li>`;
-                    }
-                    if (positions.target_settlement) {
-                        html += `<li>Target Settlement: ${escapeHtml(positions.target_settlement)}</li>`;
-                    }
-                    if (positions.minimum_acceptable) {
-                        html += `<li>Minimum Acceptable: ${escapeHtml(positions.minimum_acceptable)}</li>`;
-                    }
-                    html += '</ul>';
-                }
-
-                // Display next steps from draft
-                if (lsa.draft?.next_steps && lsa.draft.next_steps.length > 0) {
-                    html += '<p style="margin-bottom: 5px;"><strong>Next Steps:</strong></p>';
-                    html += '<ul style="margin-left: 20px;">';
-                    lsa.draft.next_steps.forEach(step => {
-                        html += `<li>${escapeHtml(step)}</li>`;
-                    });
-                    html += '</ul>';
-                }
-
-                // Display risk level
-                if (lsa.draft?.risk_level) {
-                    const riskColor = lsa.draft.risk_level === 'low' ? '#28a745' :
-                                     lsa.draft.risk_level === 'medium' ? '#ffc107' : '#dc3545';
-                    html += `<p style="margin-top: 10px;"><strong>Risk Level:</strong> <span style="color: ${riskColor}; font-weight: bold; text-transform: uppercase;">${escapeHtml(lsa.draft.risk_level)}</span></p>`;
-                }
-
-                html += '</div>';
-            }
-
-            // Attorney review warning
-            html += '<div style="margin-top: 15px; padding: 15px; background: #fff3cd; border-radius: 6px; border: 1px solid #ffc107;">';
-            html += '<strong>⚠️ Attorney Review Required:</strong> This analysis is AI-generated and must be reviewed by a licensed attorney before use in any legal proceedings.';
-            html += '</div>';
-
-            // Full JSON in collapsible section
-            html += '<details style="margin-top: 15px;">';
-            html += '<summary style="cursor: pointer; color: #666; font-weight: 600;">📋 View Full Technical Details (JSON)</summary>';
-            html += `<pre style="background: white; padding: 15px; border-radius: 6px; overflow-x: auto; margin-top: 10px; max-height: 400px; overflow-y: auto; font-size: 0.85em;">${JSON.stringify(data, null, 2)}</pre>`;
-            html += '</details>';
-
-            return html;
-        }
-
         function escapeHtml(text) {
             if (!text) return '';
             const div = document.createElement('div');
@@ -650,35 +1282,174 @@
             return div.innerHTML;
         }
 
+        function setAgentActive(agentId, active) {
+            const card = document.getElementById(`agent-${agentId}`);
+            if (card) {
+                if (active) {
+                    card.classList.add('active');
+                } else {
+                    card.classList.remove('active');
+                }
+            }
+        }
+
+        function resetAgents() {
+            ['lda', 'dea', 'lsa', 'dda'].forEach(id => setAgentActive(id, false));
+        }
+
+        function getStrengthBadge(strength) {
+            if (!strength) return '';
+            const cls = strength === 'strong' ? 'strength-strong' :
+                       strength === 'moderate' ? 'strength-moderate' : 'strength-weak';
+            return `<span class="strength-badge ${cls}">${escapeHtml(strength)}</span>`;
+        }
+
+        function formatAnalysisResults(data) {
+            const artifacts = data.artifacts || {};
+            let sections = '';
+
+            // LDA Analysis
+            if (artifacts.lda?.facts) {
+                const facts = artifacts.lda.facts;
+                let content = '';
+
+                if (facts.matter_overview) {
+                    content += `<p style="margin-bottom: 12px;">${escapeHtml(facts.matter_overview)}</p>`;
+                }
+
+                if (facts.fact_pattern_summary?.length > 0) {
+                    content += '<ul class="analysis-list">';
+                    facts.fact_pattern_summary.slice(0, 5).forEach(fact => {
+                        content += `<li>${escapeHtml(fact)}</li>`;
+                    });
+                    if (facts.fact_pattern_summary.length > 5) {
+                        content += `<li><em>+${facts.fact_pattern_summary.length - 5} more facts</em></li>`;
+                    }
+                    content += '</ul>';
+                }
+
+                if (facts.damages_analysis?.total_damages) {
+                    content += `<p style="margin-top: 12px;"><strong>Estimated Damages:</strong> $${facts.damages_analysis.total_damages.toLocaleString()}</p>`;
+                }
+
+                sections += `
+                    <div class="analysis-section analysis-lda">
+                        <div class="analysis-header">
+                            <div class="analysis-icon">📊</div>
+                            <div class="analysis-title">Case Facts</div>
+                        </div>
+                        <div class="analysis-content">${content}</div>
+                    </div>
+                `;
+            }
+
+            // DEA Analysis
+            if (artifacts.dea?.legal_analysis) {
+                const legal = artifacts.dea.legal_analysis;
+                let content = '';
+
+                if (legal.analysis) {
+                    content += `<p style="margin-bottom: 12px;">${escapeHtml(legal.analysis.substring(0, 400))}${legal.analysis.length > 400 ? '...' : ''}</p>`;
+                }
+
+                if (legal.issues?.length > 0) {
+                    content += '<ul class="analysis-list">';
+                    legal.issues.forEach(issue => {
+                        if (typeof issue === 'string') {
+                            content += `<li>${escapeHtml(issue)}</li>`;
+                        } else if (issue.issue) {
+                            content += `<li>${escapeHtml(issue.issue)}${getStrengthBadge(issue.strength)}</li>`;
+                        }
+                    });
+                    content += '</ul>';
+                }
+
+                sections += `
+                    <div class="analysis-section analysis-dea">
+                        <div class="analysis-header">
+                            <div class="analysis-icon">⚖️</div>
+                            <div class="analysis-title">Legal Analysis</div>
+                        </div>
+                        <div class="analysis-content">${content}</div>
+                    </div>
+                `;
+            }
+
+            // LSA Strategy
+            if (artifacts.lsa) {
+                const lsa = artifacts.lsa;
+                let content = '';
+
+                if (lsa.draft?.client_safe_summary) {
+                    content += `<p style="margin-bottom: 12px;">${escapeHtml(lsa.draft.client_safe_summary)}</p>`;
+                }
+
+                if (lsa.strategy?.recommended_actions?.length > 0) {
+                    content += '<ul class="analysis-list">';
+                    lsa.strategy.recommended_actions.slice(0, 4).forEach(action => {
+                        content += `<li>${escapeHtml(action)}</li>`;
+                    });
+                    content += '</ul>';
+                }
+
+                sections += `
+                    <div class="analysis-section analysis-lsa">
+                        <div class="analysis-header">
+                            <div class="analysis-icon">🎯</div>
+                            <div class="analysis-title">Strategic Recommendations</div>
+                        </div>
+                        <div class="analysis-content">${content}</div>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="result-header success">
+                    <div class="result-icon">✓</div>
+                    <h3 class="result-title">Analysis Complete</h3>
+                </div>
+                <div class="result-body">
+                    ${sections}
+                    <div class="warning-banner">
+                        <span class="warning-icon">⚠️</span>
+                        <p class="warning-text"><strong>Attorney Review Required</strong> — This analysis is AI-generated and must be reviewed by a licensed attorney before use.</p>
+                    </div>
+                    <details class="details-toggle">
+                        <summary>View Technical Details (JSON)</summary>
+                        <pre class="details-content">${JSON.stringify(data, null, 2)}</pre>
+                    </details>
+                </div>
+            `;
+        }
+
+        // Form submission
         document.getElementById('matterForm').addEventListener('submit', async (e) => {
             e.preventDefault();
 
             const submitBtn = document.getElementById('submitBtn');
             const loading = document.getElementById('loading');
-            const result = document.getElementById('result');
+            const resultContainer = document.getElementById('resultContainer');
+            const resultCard = document.getElementById('resultCard');
 
             submitBtn.disabled = true;
-            loading.style.display = 'block';
-            result.style.display = 'none';
+            loading.classList.add('visible');
+            resultContainer.classList.remove('visible');
+            resetAgents();
+
+            // Simulate agent activation
+            setTimeout(() => setAgentActive('lda', true), 500);
+            setTimeout(() => setAgentActive('dea', true), 1500);
+            setTimeout(() => setAgentActive('lsa', true), 2500);
+            setTimeout(() => setAgentActive('dda', true), 3500);
 
             try {
-                // Gather form data
                 const formData = new FormData(e.target);
 
-                // Get party information
                 const plaintiffName = formData.get('plaintiff_name');
                 const defendantName = formData.get('defendant_name');
-                const partyRepresented = formData.get('party_represented');
+                const documentType = formData.get('document_type') || 'complaint';
 
-                // Build parties array
-                const parties = [
-                    `Plaintiff: ${plaintiffName}`,
-                    `Defendant: ${defendantName}`
-                ];
-
-                // Build documents array
                 const documents = [];
-
                 if (uploadedFiles.length > 0) {
                     for (let file of uploadedFiles) {
                         documents.push({
@@ -699,26 +1470,21 @@
                     });
                 }
 
-                // Get document type from form (defaults to complaint)
-                const documentType = formData.get('document_type') || 'complaint';
-
-                // Build matter payload
                 const matter = {
                     summary: formData.get('summary'),
-                    parties: parties,
+                    parties: [`Plaintiff: ${plaintiffName}`, `Defendant: ${defendantName}`],
                     documents: documents,
-                    document_type: documentType, // Add document type to root level
+                    document_type: documentType,
                     metadata: {
                         jurisdiction: formData.get('jurisdiction'),
                         cause_of_action: formData.get('cause_of_action') || undefined,
                         plaintiff_name: plaintiffName,
                         defendant_name: defendantName,
-                        party_represented: partyRepresented,
-                        document_type: documentType // Also include in metadata for backwards compatibility
+                        party_represented: formData.get('party_represented'),
+                        document_type: documentType
                     }
                 };
 
-                // Add damages if provided
                 const specials = parseFloat(formData.get('specials'));
                 const generals = parseFloat(formData.get('generals'));
                 const punitive = parseFloat(formData.get('punitive'));
@@ -731,24 +1497,17 @@
                     };
                 }
 
-                // Submit to orchestrator
                 const response = await fetch('/orchestrator/execute', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ matter: matter })
                 });
 
                 const data = await response.json();
 
                 if (response.ok) {
-                    result.className = 'result success';
-
-                    // Extract the document from DDA agent output - check multiple possible locations
+                    // Check for document in various locations
                     let documentText = null;
-
-                    // Try different possible paths for the document
                     if (data.artifacts?.dda?.document?.full_text) {
                         documentText = data.artifacts.dda.document.full_text;
                     } else if (data.artifacts?.dda?.core?.document?.full_text) {
@@ -757,7 +1516,6 @@
                         documentText = data.artifacts.dda.full_text;
                     }
 
-                    // Also check in the steps for DDA output
                     if (!documentText && data.steps) {
                         const ddaStep = data.steps.find(step => step.agent === 'dda' && step.output?.document);
                         if (ddaStep?.output?.document?.full_text) {
@@ -765,78 +1523,49 @@
                         }
                     }
 
-                    // Log for debugging
-                    console.log('Response data:', data);
-                    console.log('Document text found:', documentText ? 'YES' : 'NO');
-                    if (typeof documentText === 'string') {
-                        console.log('Document text length:', documentText.length);
-                    }
-                    if (data.artifacts?.dda) {
-                        console.log('DDA artifacts:', data.artifacts.dda);
-                    }
+                    if (typeof documentText === 'string' && documentText.trim().length > 0) {
+                        const docType = data.artifacts?.dda?.metadata?.document_type ||
+                                       data.artifacts?.dda?.document?.type || documentType;
+                        const docTitle = docType.charAt(0).toUpperCase() + docType.slice(1).replace('_', ' ');
 
-                    const hasDocumentText = typeof documentText === 'string' && documentText.trim().length > 0;
-
-                    if (hasDocumentText) {
-                        const rawDocumentText = documentText;
-                        const trimmedLength = rawDocumentText.trim().length;
-
-                        // Prefer explicit metadata for the document type but fall back gracefully
-                        const docType =
-                            data.artifacts?.dda?.metadata?.document_type ||
-                            data.artifacts?.dda?.document?.type ||
-                            'document';
-
-                        result.innerHTML = `
-                            <h3>✅ Legal ${docType.charAt(0).toUpperCase() + docType.slice(1)} Generated!</h3>
-                            <p>Themis has drafted a formal ${docType} based on your case information.</p>
-                            <div style="background: white; padding: 20px; border-radius: 6px; margin-top: 15px; font-family: 'Courier New', monospace; white-space: pre-wrap; line-height: 1.6; max-height: 600px; overflow-y: auto; border: 1px solid #ddd;">${escapeHtml(documentText)}</div>
-                            <div style="margin-top: 15px; padding: 10px; background: #fff3cd; border-radius: 6px;">
-                                <strong>⚠️ Attorney Review Required:</strong> This document is AI-generated and must be reviewed by a licensed attorney before filing.
+                        resultCard.innerHTML = `
+                            <div class="result-header success">
+                                <div class="result-icon">✓</div>
+                                <h3 class="result-title">${docTitle} Generated</h3>
                             </div>
-                            ${trimmedLength < 200 ? `<div style="margin-top: 10px; padding: 10px; background: #e9ecef; border-radius: 6px; color: #495057;">
-                                <strong>Heads up:</strong> The generated document is quite brief. Review the JSON details below to confirm all required sections are present.
-                            </div>` : ''}
-                            <details style="margin-top: 15px;">
-                                <summary style="cursor: pointer; color: #666;">View Full Response Data (JSON)</summary>
-                                <pre style="background: white; padding: 15px; border-radius: 6px; overflow-x: auto; margin-top: 10px;">${JSON.stringify(data, null, 2)}</pre>
-                            </details>
+                            <div class="result-body">
+                                <div class="document-output">${escapeHtml(documentText)}</div>
+                                <div class="warning-banner">
+                                    <span class="warning-icon">⚠️</span>
+                                    <p class="warning-text"><strong>Attorney Review Required</strong> — This document is AI-generated and must be reviewed before filing.</p>
+                                </div>
+                                <details class="details-toggle">
+                                    <summary>View Full Response (JSON)</summary>
+                                    <pre class="details-content">${JSON.stringify(data, null, 2)}</pre>
+                                </details>
+                            </div>
                         `;
                     } else {
-                        // Check if DDA ran but we couldn't find the document
-                        const ddaRan = data.artifacts?.dda || data.steps?.some(s => s.agent === 'dda');
-
-                        if (ddaRan) {
-                            // DDA ran but we couldn't extract the document - show error with JSON
-                            result.className = 'result error';
-                            result.innerHTML = `
-                                <h3>⚠️ Document Generated But Not Displayed</h3>
-                                <p>The DDA agent generated a document, but there was an issue extracting it for display.</p>
-                                <p><strong>Please check the JSON response below to see the document structure:</strong></p>
-                                <details open style="margin-top: 15px;">
-                                    <summary style="cursor: pointer; color: #666; font-weight: bold;">View Response Data (JSON)</summary>
-                                    <pre style="background: white; padding: 15px; border-radius: 6px; overflow-x: auto; margin-top: 10px; max-height: 600px; overflow-y: auto;">${JSON.stringify(data, null, 2)}</pre>
-                                </details>
-                                <p style="margin-top: 15px; color: #666;">Look for the "dda" section in the JSON above to find the generated document.</p>
-                            `;
-                        } else {
-                            // Display formatted analysis results
-                            result.innerHTML = formatAnalysisResults(data);
-                        }
+                        resultCard.innerHTML = formatAnalysisResults(data);
                     }
                 } else {
                     throw new Error(data.detail || 'Failed to process matter');
                 }
             } catch (error) {
-                result.className = 'result error';
-                result.innerHTML = `
-                    <h3>❌ Error</h3>
-                    <p>${error.message}</p>
+                resultCard.innerHTML = `
+                    <div class="result-header error">
+                        <div class="result-icon">✕</div>
+                        <h3 class="result-title">Error</h3>
+                    </div>
+                    <div class="result-body">
+                        <p style="color: var(--text-secondary);">${escapeHtml(error.message)}</p>
+                    </div>
                 `;
             } finally {
-                loading.style.display = 'none';
-                result.style.display = 'block';
+                loading.classList.remove('visible');
+                resultContainer.classList.add('visible');
                 submitBtn.disabled = false;
+                setTimeout(resetAgents, 1000);
             }
         });
     </script>
