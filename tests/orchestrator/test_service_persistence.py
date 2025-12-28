@@ -83,7 +83,11 @@ def test_plan_and_execution_are_persisted(tmp_path, dummy_agents):
     repository = SQLiteOrchestratorStateRepository(database_url=database_url)
     service = OrchestratorService(agents=dummy_agents, repository=repository)
 
-    matter = {"case": "example"}
+    matter = {
+        "summary": "Test case for persistence validation",
+        "parties": ["Plaintiff", "Defendant"],
+        "documents": [{"title": "Evidence", "content": "Test content", "date": "2024-01-01"}],
+    }
     plan = asyncio.run(service.plan(matter))
     plan_id = plan["plan_id"]
 
@@ -187,13 +191,18 @@ def test_execute_passes_expected_artifacts_between_agents(tmp_path):
         repository=SQLiteOrchestratorStateRepository(database_url=database_url),
     )
 
-    matter = {"summary": "Example"}
+    matter = {
+        "summary": "Test case for artifact propagation",
+        "parties": ["Plaintiff", "Defendant"],
+        "documents": [{"title": "Evidence", "content": "Test content", "date": "2024-01-01"}],
+    }
     execution = asyncio.run(service.execute(matter=matter))
 
     assert execution["status"] == "complete"
 
     assert lda_agent.seen_inputs
-    assert lda_agent.seen_inputs[0] == matter
+    # LDA receives validated matter (may have normalized fields)
+    assert lda_agent.seen_inputs[0]["summary"] == matter["summary"]
 
     assert dea_agent.seen_inputs, "DEA agent should have received input"
     dea_input = dea_agent.seen_inputs[0]
@@ -217,14 +226,16 @@ def test_execute_passes_expected_artifacts_between_agents(tmp_path):
 
 
 def test_missing_plan_raises_error(tmp_path, dummy_agents):
+    from orchestrator.exceptions import ExecutionNotFoundError, PlanNotFoundError
+
     database_url = f"sqlite:///{tmp_path/'orchestrator.db'}"
     service = OrchestratorService(
         agents=dummy_agents,
         repository=SQLiteOrchestratorStateRepository(database_url=database_url),
     )
 
-    with pytest.raises(ValueError):
+    with pytest.raises(PlanNotFoundError):
         asyncio.run(service.get_plan("unknown-plan"))
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ExecutionNotFoundError):
         asyncio.run(service.get_artifacts("unknown-plan"))
