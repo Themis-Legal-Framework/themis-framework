@@ -15,11 +15,18 @@ from agents.dea import DEAAgent
 from agents.lda import LDAAgent
 from agents.lsa import LSAAgent
 from connectors import ConnectorRegistry
+from orchestrator.document_type_detector import determine_document_type
+from orchestrator.exceptions import (
+    AgentExecutionError,
+    AgentNotFoundError,
+    ExecutionNotFoundError,
+    PlanNotFoundError,
+)
 from orchestrator.policy import RoutingPolicy
 from orchestrator.storage.sqlite_repository import SQLiteOrchestratorStateRepository
 from orchestrator.task_graph import TaskGraph
 from orchestrator.tracing import TraceRecorder
-from orchestrator.document_type_detector import determine_document_type
+from orchestrator.validation import validate_execute_params, validate_matter
 
 logger = logging.getLogger("themis.orchestrator")
 
@@ -102,16 +109,28 @@ class OrchestratorService:
         self._dirty = False
 
     async def plan(self, matter: dict[str, Any]) -> dict[str, Any]:
-        """Create an executable plan across the registered agents."""
+        """Create an executable plan across the registered agents.
+
+        Args:
+            matter: The legal matter payload to plan for.
+
+        Returns:
+            The created plan with steps and metadata.
+
+        Raises:
+            ValidationError: If the matter payload is invalid.
+        """
+        # Validate input
+        validated_matter = validate_matter(matter)
 
         self.state = self._load_state()
         plan_id = str(uuid4())
-        graph = self.policy.build_graph(matter)
+        graph = self.policy.build_graph(validated_matter)
 
         plan: dict[str, Any] = {
             "plan_id": plan_id,
             "status": "planned",
-            "matter": matter,
+            "matter": validated_matter,
             "graph": graph.as_dict(),
             "steps": graph.to_linear_steps(),
             "connectors": self.connectors.catalogue(),
@@ -130,21 +149,34 @@ class OrchestratorService:
         matter: dict[str, Any] | None = None,
         plan_id: str | None = None,
     ) -> dict[str, Any]:
-        """Execute a plan by invoking each registered agent in order."""
+        """Execute a plan by invoking each registered agent in order.
+
+        Args:
+            matter: Optional matter payload (required if no plan_id).
+            plan_id: Optional plan ID to execute (if provided, uses existing plan).
+
+        Returns:
+            Execution record with status, steps, and artifacts.
+
+        Raises:
+            ValidationError: If parameters are invalid.
+            PlanNotFoundError: If the specified plan does not exist.
+        """
+        # Validate inputs
+        validated_matter, validated_plan_id = validate_execute_params(matter, plan_id)
 
         self.state = self._load_state()
-        if plan_id is not None:
-            plan = self.state.recall_plan(plan_id)
+        if validated_plan_id is not None:
+            plan = self.state.recall_plan(validated_plan_id)
             if plan is None:
-                raise ValueError(f"Plan '{plan_id}' does not exist")
-            if matter is not None:
-                plan["matter"] = matter
-                self.state.remember_plan(plan_id, deepcopy(plan))
+                raise PlanNotFoundError(validated_plan_id)
+            if validated_matter is not None:
+                plan["matter"] = validated_matter
+                self.state.remember_plan(validated_plan_id, deepcopy(plan))
                 self._save_state()
+            plan_id = validated_plan_id
         else:
-            if matter is None:
-                raise ValueError("Matter payload is required when no plan_id is provided")
-            plan = await self.plan(matter)
+            plan = await self.plan(validated_matter)
             plan_id = plan["plan_id"]
 
         plan_matter = deepcopy(plan.get("matter", {}))
@@ -360,21 +392,39 @@ class OrchestratorService:
         return execution_record
 
     async def get_plan(self, plan_id: str) -> dict[str, Any]:
-        """Retrieve a persisted plan by identifier."""
+        """Retrieve a persisted plan by identifier.
 
+        Args:
+            plan_id: The plan ID to retrieve.
+
+        Returns:
+            The plan data.
+
+        Raises:
+            PlanNotFoundError: If the plan does not exist.
+        """
         self.state = self._load_state()
         plan = self.state.recall_plan(plan_id)
         if plan is None:
-            raise ValueError(f"Plan '{plan_id}' does not exist")
+            raise PlanNotFoundError(plan_id)
         return deepcopy(plan)
 
     async def get_artifacts(self, plan_id: str) -> dict[str, Any]:
-        """Retrieve execution artifacts for a given plan identifier."""
+        """Retrieve execution artifacts for a given plan identifier.
 
+        Args:
+            plan_id: The plan ID to get artifacts for.
+
+        Returns:
+            The execution artifacts.
+
+        Raises:
+            ExecutionNotFoundError: If the execution does not exist.
+        """
         self.state = self._load_state()
         execution = self.state.recall_execution(plan_id)
         if execution is None:
-            raise ValueError(f"Execution for plan '{plan_id}' does not exist")
+            raise ExecutionNotFoundError(plan_id)
         return deepcopy(execution.get("artifacts", {}))
 
 
