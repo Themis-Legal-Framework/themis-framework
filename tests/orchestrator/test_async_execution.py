@@ -273,7 +273,7 @@ class TestAsyncExecutionManager:
                 return_value=mock_response
             )
 
-            job = await manager.start_async("plan-123", webhook=webhook)
+            _job = await manager.start_async("plan-123", webhook=webhook)
             await asyncio.sleep(0.1)
 
             # Verify webhook was called

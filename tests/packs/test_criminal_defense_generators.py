@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 
 from packs.criminal_defense.generators import (
-    BaseGenerator,
     BradyChecklistGenerator,
     ConstitutionalAnalysisGenerator,
     DiscoveryDemandGenerator,
