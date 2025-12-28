@@ -127,10 +127,13 @@ System Architecture
 themis-framework/
 ├── agents/                 # 🤖 Specialist agents (LDA, DEA, LSA, DDA)
 │   ├── base.py            # Base agent with metrics, logging, tool invocation
+│   ├── constants.py       # Centralized configuration constants
+│   ├── tooling.py         # Tool specification and registration
 │   ├── lda.py             # Legal Data Analyst (facts, timelines, damages)
 │   ├── dea.py             # Doctrinal Expert (legal analysis, citations)
 │   ├── lsa.py             # Legal Strategist (strategy, risk assessment)
-│   └── dda.py             # Document Drafting Agent (formal legal documents)
+│   ├── dda.py             # Document Drafting Agent (formal legal documents)
+│   └── dda_tools.py       # DDA tool implementations (section generation, validation)
 │
 ├── orchestrator/          # 🎼 Agent coordination and workflow management
 │   ├── main.py            # Simple sequential orchestrator
@@ -138,6 +141,12 @@ themis-framework/
 │   ├── policy.py          # Routing policy and phase definitions
 │   ├── router.py          # FastAPI routes for orchestration
 │   ├── state.py           # State management abstractions
+│   ├── models.py          # Pydantic models for type safety
+│   ├── exceptions.py      # Custom exception hierarchy
+│   ├── validation.py      # Input validation layer
+│   ├── task_graph.py      # DAG-based task execution
+│   ├── tracing.py         # Execution tracing and observability
+│   ├── document_type_detector.py  # Auto-detection of document types
 │   └── storage/           # State persistence (SQLite with TTL caching)
 │
 ├── api/                   # 🌐 FastAPI REST interface
@@ -147,8 +156,9 @@ themis-framework/
 │   └── logging_config.py  # Structured logging configuration
 │
 ├── tools/                 # 🔧 Utilities and integrations
-│   ├── llm_client.py      # Anthropic Claude client with extended thinking, caching, code execution
-│   ├── mcp_config.py      # NEW: Model Context Protocol configuration manager
+│   ├── llm_client.py      # Anthropic Claude client (production mode)
+│   ├── stub_llm_client.py # Stub LLM handler for testing without API keys
+│   ├── mcp_config.py      # Model Context Protocol configuration manager
 │   ├── document_parser.py # PDF/text extraction with LLM analysis
 │   ├── metrics.py         # Prometheus metrics registry
 │   └── registry.py        # Tool registration system
@@ -311,6 +321,45 @@ Themis uses Pydantic for runtime validation and type safety across all data stru
 - Script injection prevention
 - Control character sanitization
 - Required field enforcement with detailed 422 error messages
+
+### Modular Architecture
+Themis follows a modular design with clear separation of concerns:
+
+**Agent Layer:**
+- `agents/base.py` – Abstract base class with metrics, logging, and tool invocation
+- `agents/constants.py` – Centralized magic numbers and configuration values
+- `agents/tooling.py` – Tool specification and registration system
+- `agents/dda_tools.py` – Document drafting tool implementations (separated from agent logic)
+
+**LLM Layer:**
+- `tools/llm_client.py` – Production Claude API client (~500 lines)
+- `tools/stub_llm_client.py` – Testing stub handler (~880 lines, no API required)
+
+**Orchestrator Layer:**
+- `orchestrator/exceptions.py` – Custom exception hierarchy for consistent error handling
+- `orchestrator/validation.py` – Input validation using Pydantic models
+- `orchestrator/service.py` – Main orchestration logic with caching
+
+### Error Handling
+Themis provides a structured exception hierarchy for consistent error handling:
+
+```python
+ThemisError                    # Base exception with to_dict() for JSON responses
+├── ValidationError            # Input validation failures (matter, params)
+├── PlanNotFoundError          # Missing plan references
+├── ExecutionNotFoundError     # Missing execution references
+├── AgentNotFoundError         # Unregistered agent references
+├── AgentExecutionError        # Agent runtime failures
+├── ConnectorError             # External connector issues
+├── DocumentGenerationError    # Document drafting failures
+└── LLMError                   # LLM API operation failures
+```
+
+**Benefits:**
+- All exceptions include structured `details` dict for debugging
+- `to_dict()` method enables JSON serialization for API responses
+- Specific exception types enable precise error handling
+- Validation errors include field names and invalid values
 
 Quick Start
 -----------
