@@ -2,12 +2,27 @@
 
 from __future__ import annotations
 
+import json
+import logging
 from collections.abc import Callable, Iterable
 from typing import Any
 
 from agents.base import BaseAgent
+from agents.constants import (
+    MAX_DOCUMENT_WORDS,
+    MAX_TOKENS_DOCUMENT_GENERATION,
+    MAX_TOKENS_SYNTHESIS,
+    MAX_TOKENS_TONE_ANALYSIS,
+    MAX_WARNINGS_FOR_VALID_DOC,
+    MIN_DOCUMENT_WORDS,
+    MIN_PARTIES_FOR_DEFENDANT,
+    MIN_SECTIONS_FOR_VALID_DOC,
+    MIN_SUMMARY_LENGTH,
+)
 from agents.tooling import ToolSpec
 from tools.llm_client import get_llm_client
+
+logger = logging.getLogger("themis.agents.dda")
 
 
 def _normalise_party_roles(parties: Any) -> dict[str, str]:
@@ -31,7 +46,7 @@ def _normalise_party_roles(parties: Any) -> dict[str, str]:
         names = [str(value).strip() for value in parties.values() if str(value).strip()]
         if names:
             normalised["plaintiff"] = names[0]
-            if len(names) >= 2:
+            if len(names) >= MIN_PARTIES_FOR_DEFENDANT:
                 normalised["defendant"] = names[1]
         return normalised
 
@@ -70,7 +85,7 @@ def _normalise_party_roles(parties: Any) -> dict[str, str]:
                     unnamed.append(entry_str)
         if normalised["plaintiff"] == defaults["plaintiff"] and unnamed:
             normalised["plaintiff"] = unnamed[0]
-        if normalised["defendant"] == defaults["defendant"] and len(unnamed) >= 2:
+        if normalised["defendant"] == defaults["defendant"] and len(unnamed) >= MIN_PARTIES_FOR_DEFENDANT:
             normalised["defendant"] = unnamed[1]
         return normalised
 
@@ -156,19 +171,15 @@ class DocumentDraftingAgent(BaseAgent):
 
         Claude decides which tools to use and in what order based on the document requirements.
         """
-        import json
-        import logging
-
-        logger = logging.getLogger("themis.agents.dda")
         llm = get_llm_client()
 
-        # DEBUG: Log what matter keys DDA receives
-        logger.info(f"DDA received matter with keys: {list(matter.keys())}")
+        # Log matter keys for debugging
+        logger.debug(f"DDA received matter with keys: {list(matter.keys())}")
         if "facts" in matter:
             facts = matter.get("facts", {})
-            logger.info(f"✓ DDA has facts with {len(facts.get('fact_pattern_summary', []))} fact_pattern_summary items")
+            logger.debug(f"DDA has facts with {len(facts.get('fact_pattern_summary', []))} fact_pattern_summary items")
         else:
-            logger.warning("✗ DDA does NOT have facts in matter")
+            logger.debug("DDA does not have facts in matter")
 
         # Determine document type from matter - user should specify what they need
         document_type = matter.get("document_type") or matter.get("metadata", {}).get("document_type", "memorandum")
@@ -294,7 +305,7 @@ Then provide the final document with metadata and validation results."""
             user_prompt=user_prompt,
             tools=tools,
             tool_functions=tool_functions,
-            max_tokens=8192,  # Larger for document generation
+            max_tokens=MAX_TOKENS_DOCUMENT_GENERATION,
         )
 
         # Track tool invocations for metrics
@@ -335,10 +346,8 @@ Then provide the final document with metadata and validation results."""
             if not validation:
                 validation = fallback.get("validation", {})
 
-        # Ensure document has full_text (required by tests)
+        # Ensure document has full_text - reconstruct from tool calls if missing
         if not document.get("full_text"):
-            # BUG FIX: Always try to reconstruct from tool calls first if full_text is missing
-            # This handles the case where Claude returns document metadata but not the actual text
             fallback = self._construct_document_from_tool_calls(result.get("tool_calls", []), document_type, jurisdiction)
             document = fallback.get("document", {})
             if not metadata:
@@ -387,16 +396,13 @@ This {document_type} requires additional information to be completed.
             "jurisdiction": jurisdiction,
         }
 
-        # DEBUG: Log the document structure before returning
-        logger.info("=== DDA AGENT RESPONSE DEBUG ===")
-        logger.info(f"Document keys: {list(document.keys())}")
-        logger.info(f"Has full_text: {'full_text' in document}")
+        # Log document structure for debugging
+        logger.debug(f"Document keys: {list(document.keys())}")
+        logger.debug(f"Has full_text: {'full_text' in document}")
         if 'full_text' in document:
-            logger.info(f"full_text length: {len(document['full_text'])} chars")
-            logger.info(f"full_text preview: {document['full_text'][:200]}")
+            logger.debug(f"full_text length: {len(document['full_text'])} chars")
         else:
-            logger.error("NO full_text IN DOCUMENT!")
-            logger.error(f"Document structure: {document}")
+            logger.warning("No full_text in document - may indicate generation failure")
 
         response = self._build_response(
             core={
@@ -413,11 +419,7 @@ This {document_type} requires additional information to be completed.
             unresolved_issues=unresolved,
         )
 
-        # DEBUG: Log the final response structure
-        logger.info(f"Final response keys: {list(response.keys())}")
-        logger.info(f"Has document in response: {'document' in response}")
-        if 'document' in response:
-            logger.info(f"Response document keys: {list(response['document'].keys())}")
+        logger.debug(f"Final response keys: {list(response.keys())}")
 
         return response
 
@@ -494,7 +496,7 @@ async def _default_section_generator(
     # Facts
     if facts:
         fact_pattern = facts.get("fact_pattern_summary", [])
-        logger.info(f"section_generator received {len(fact_pattern)} facts")
+        logger.debug(f"section_generator received {len(fact_pattern)} facts")
         if fact_pattern:
             context_parts.append("Facts:\n" + "\n".join(f"  - {f}" for f in fact_pattern))
 
@@ -616,33 +618,26 @@ Return the document as a single complete text in the 'full_document' field."""
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             response_format=response_format,
-            max_tokens=8000,  # Sufficient for full professional legal documents
+            max_tokens=MAX_TOKENS_DOCUMENT_GENERATION,
         )
 
-        # Log the response for debugging
-        import logging
-        import json
-        logger = logging.getLogger("themis.agents.dda")
-        logger.info(f"Document generator response keys: {list(result.keys())}")
+        logger.debug(f"Document generator response keys: {list(result.keys())}")
 
-        # FIX: Handle case where LLM wraps response in 'response' key
+        # Handle case where LLM wraps response in 'response' key
         if 'response' in result and isinstance(result['response'], str):
             try:
                 result = json.loads(result['response'])
-                logger.info("Parsed nested JSON from 'response' key")
+                logger.debug("Parsed nested JSON from 'response' key")
             except json.JSONDecodeError:
-                logger.error(f"Failed to parse nested JSON: {result['response'][:200]}", exc_info=True)
+                logger.warning(f"Failed to parse nested JSON: {result['response'][:200]}")
 
         # Log document preview if we got it
         if result.get('full_document'):
             doc_preview = result['full_document'][:200].replace('\n', ' ')
-            logger.info(f"Generated {document_type} document ({len(result['full_document'])} chars): {doc_preview}...")
+            logger.debug(f"Generated {document_type} document ({len(result['full_document'])} chars): {doc_preview}...")
 
         return result
     except Exception as e:
-        # Log the error so we can see what failed
-        import logging
-        logger = logging.getLogger("themis.agents.dda")
         logger.error(f"Document generator LLM call failed: {e!s}", exc_info=True)
 
         # Fallback to basic document generation
@@ -737,7 +732,7 @@ Respond in JSON format:
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             response_format=response_format,
-            max_tokens=2000,
+            max_tokens=MAX_TOKENS_SYNTHESIS,
         )
         result["formatted_count"] = len(result.get("citations", []))
         return result
@@ -900,10 +895,10 @@ async def _default_document_validator(
 
     # Check document length
     word_count = document.get("word_count", 0)
-    if word_count < 100:
-        warnings.append("Document appears too short (< 100 words)")
-    elif word_count > 10000:
-        warnings.append("Document may be too long (> 10,000 words)")
+    if word_count < MIN_DOCUMENT_WORDS:
+        warnings.append(f"Document appears too short (< {MIN_DOCUMENT_WORDS} words)")
+    elif word_count > MAX_DOCUMENT_WORDS:
+        warnings.append(f"Document may be too long (> {MAX_DOCUMENT_WORDS:,} words)")
 
     # Check for placeholder text
     placeholders = ["[", "TODO", "TBD", "XXXX", "N/A"]
@@ -911,7 +906,7 @@ async def _default_document_validator(
         if placeholder in full_text:
             warnings.append(f"Document contains placeholder text: {placeholder}")
 
-    is_valid = len(missing_elements) == 0 and len(warnings) < 3
+    is_valid = len(missing_elements) == 0 and len(warnings) < MAX_WARNINGS_FOR_VALID_DOC
 
     return {
         "is_valid": is_valid,
@@ -930,7 +925,7 @@ async def _default_tone_analyzer(
 
     full_text = document.get("full_text", "")
 
-    if not full_text or len(full_text) < 50:
+    if not full_text or len(full_text) < MIN_SUMMARY_LENGTH:
         return {
             "overall_score": 0,
             "issues": ["Document too short to analyze"],
@@ -981,7 +976,7 @@ Respond in JSON format:
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             response_format=response_format,
-            max_tokens=1000,
+            max_tokens=MAX_TOKENS_TONE_ANALYSIS,
         )
         # Ensure score is in valid range
         if "overall_score" in result:
@@ -990,7 +985,7 @@ Respond in JSON format:
     except Exception:
         # Fallback to basic analysis
         word_count = document.get("word_count", 0)
-        has_sections = len(document.get("sections", [])) > 3
+        has_sections = len(document.get("sections", [])) > MIN_SECTIONS_FOR_VALID_DOC
 
         score = 60
         if has_sections:

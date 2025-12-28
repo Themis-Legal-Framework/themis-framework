@@ -117,13 +117,9 @@ class OrchestratorService:
             "connectors": self.connectors.catalogue(),
         }
 
-        # DEBUG: Log planned phases
+        # Log planned phases
         phases = [step.get("phase") for step in plan["steps"]]
-        logger.info(f"=== PLANNED PHASES: {phases}")
-        if "document_assembly" in phases:
-            logger.info("✓ DOCUMENT_ASSEMBLY phase is included in plan")
-        else:
-            logger.warning("✗ DOCUMENT_ASSEMBLY phase is NOT in plan!")
+        logger.debug(f"Planned phases: {phases}")
 
         self.state.remember_plan(plan_id, deepcopy(plan))
         self._save_state()
@@ -213,9 +209,9 @@ class OrchestratorService:
                 # Auto-detect document type before DDA runs
                 if agent_name == "dda" and "document_type" not in agent_input:
                     if "document_type" not in agent_input.get("metadata", {}):
-                        logger.info("Auto-detecting document type for DDA agent...")
+                        logger.debug("Auto-detecting document type for DDA agent")
                         detected_type = await determine_document_type(agent_input)
-                        logger.info(f"Document type detected: {detected_type}")
+                        logger.debug(f"Document type detected: {detected_type}")
                         agent_input["document_type"] = detected_type
                         if "metadata" not in agent_input:
                             agent_input["metadata"] = {}
@@ -234,19 +230,15 @@ class OrchestratorService:
                 artifacts[agent_name] = output
                 propagated[agent_name] = output
 
-                # DEBUG: Log artifact storage for DDA
+                # Log artifact storage for debugging
                 if agent_name == "dda":
-                    logger.info("=== ORCHESTRATOR: Storing DDA artifact ===")
-                    logger.info(f"DDA output type: {type(output)}")
-                    logger.info(f"DDA output keys: {list(output.keys()) if isinstance(output, dict) else 'NOT A DICT'}")
+                    logger.debug(f"DDA output keys: {list(output.keys()) if isinstance(output, dict) else 'NOT A DICT'}")
                     if isinstance(output, dict) and 'document' in output:
-                        logger.info(f"DDA document keys: {list(output['document'].keys())}")
-                        if 'full_text' in output['document']:
-                            logger.info(f"DDA full_text length: {len(output['document']['full_text'])} chars")
+                        doc = output['document']
+                        if 'full_text' in doc:
+                            logger.debug(f"DDA full_text length: {len(doc['full_text'])} chars")
                         else:
-                            logger.error("DDA document has NO full_text!")
-                    else:
-                        logger.error("DDA output has NO document field!")
+                            logger.warning("DDA document missing full_text")
 
                 produced_artifacts = _collect_expected_artifacts(
                     output, step.get("expected_artifacts", [])

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
@@ -158,8 +159,6 @@ class BaseAgent(ABC):
 
         Supports both synchronous and asynchronous tools.
         """
-        import asyncio
-
         if name not in self._tools:
             raise KeyError(f"Tool '{name}' is not registered for agent {self.name}.")
 

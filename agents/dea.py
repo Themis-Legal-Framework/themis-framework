@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import json
+import logging
 from collections.abc import Callable, Iterable
 from typing import Any
 
 from agents.base import BaseAgent
+from agents.constants import MAX_TOKENS_ANALYSIS, MAX_TOKENS_SYNTHESIS
 from agents.tooling import ToolSpec
 from tools.llm_client import get_llm_client
+
+logger = logging.getLogger("themis.agents.dea")
 
 
 def _format_parties(parties: list) -> str:
@@ -65,8 +70,6 @@ class DEAAgent(BaseAgent):
 
         Claude decides which tools to use and in what order based on the matter data.
         """
-        import json
-
         llm = get_llm_client()
 
         # Define available tools in Anthropic format
@@ -148,7 +151,7 @@ Then provide your complete legal analysis."""
             user_prompt=user_prompt,
             tools=tools,
             tool_functions=tool_functions,
-            max_tokens=4096,
+            max_tokens=MAX_TOKENS_ANALYSIS,
         )
 
         # Track tool invocations for metrics
@@ -340,16 +343,11 @@ Respond in JSON format:
             user_prompt=user_prompt,
             response_format=response_format,
         )
-        import logging
-        logger = logging.getLogger("themis.agents.dea")
-        logger.info(f"Issue spotter LLM response: {result}")
+        logger.debug(f"Issue spotter LLM response: {result}")
         issues = result.get("issues", [])
-        logger.info(f"Extracted {len(issues)} issues from LLM response")
+        logger.debug(f"Extracted {len(issues)} issues from LLM response")
         return issues
     except Exception as e:
-        # Log the error so we can see what's failing
-        import logging
-        logger = logging.getLogger("themis.agents.dea")
         logger.error(f"Issue spotter LLM call failed: {e!s}", exc_info=True)
 
         # Fallback to extracting from matter payload
@@ -459,13 +457,10 @@ Provide a comprehensive legal analysis (3-5 paragraphs) that:
         analysis = await llm.generate_text(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
-            max_tokens=2000,
+            max_tokens=MAX_TOKENS_SYNTHESIS,
         )
         return analysis
     except Exception as e:
-        # Log the error so we can see what's failing
-        import logging
-        logger = logging.getLogger("themis.agents.dea")
         logger.error(f"Analysis synthesis LLM call failed: {e!s}", exc_info=True)
 
         # Fallback to simple synthesis

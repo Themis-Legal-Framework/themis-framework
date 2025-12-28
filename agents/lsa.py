@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import json
+import logging
 from collections.abc import Callable, Iterable
 from typing import Any
 
 from agents.base import BaseAgent
+from agents.constants import MAX_TOKENS_ANALYSIS, MAX_TOKENS_STRATEGY
 from agents.tooling import ToolSpec
 from tools.llm_client import get_llm_client
+
+logger = logging.getLogger("themis.agents.lsa")
 
 
 def _format_parties(parties: list) -> str:
@@ -65,8 +70,6 @@ class LSAAgent(BaseAgent):
 
         Claude decides which tools to use and in what order based on the matter data.
         """
-        import json
-
         llm = get_llm_client()
 
         # Define available tools in Anthropic format
@@ -156,7 +159,7 @@ Then provide your complete strategic analysis."""
             user_prompt=user_prompt,
             tools=tools,
             tool_functions=tool_functions,
-            max_tokens=4096,
+            max_tokens=MAX_TOKENS_ANALYSIS,
         )
 
         # Track tool invocations for metrics
@@ -452,7 +455,7 @@ Respond in JSON format:
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             response_format=response_format,
-            max_tokens=3000,
+            max_tokens=MAX_TOKENS_STRATEGY,
         )
         return result
     except Exception:

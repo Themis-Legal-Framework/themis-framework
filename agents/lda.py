@@ -2,13 +2,26 @@
 
 from __future__ import annotations
 
+import json
+import logging
+import re
 from collections.abc import Callable, Iterable
 from datetime import datetime
 from typing import Any
 
 from agents.base import BaseAgent
+from agents.constants import (
+    MAX_TOKENS_ANALYSIS,
+    MIN_DATES_FOR_TIMELINE,
+    MIN_EXTRACTED_FACTS,
+    MIN_SENTENCE_LENGTH,
+    MIN_SUMMARY_LENGTH,
+)
 from agents.tooling import ToolSpec
 from tools.document_parser import parse_document_with_llm
+from tools.llm_client import get_llm_client
+
+logger = logging.getLogger("themis.agents.lda")
 
 
 class LDAAgent(BaseAgent):
@@ -90,9 +103,6 @@ class LDAAgent(BaseAgent):
 
         Claude decides which tools to use and in what order based on the matter data.
         """
-        from tools.llm_client import get_llm_client
-        import json
-
         llm = get_llm_client()
 
         # Define available tools in Anthropic format
@@ -201,7 +211,7 @@ Then provide your complete factual analysis."""
             user_prompt=user_prompt,
             tools=tools,
             tool_functions=tool_functions,
-            max_tokens=4096,
+            max_tokens=MAX_TOKENS_ANALYSIS,
         )
 
         # Track tool invocations for metrics
@@ -247,17 +257,14 @@ Then provide your complete factual analysis."""
                 # Fallback: create a placeholder timeline entry
                 facts_payload["timeline"] = [{"date": "TBD", "description": "Matter initiation - timeline to be developed"}]
 
-        # FIX: Extract facts from matter.summary if fact_pattern_summary is empty
+        # Extract facts from matter.summary if fact_pattern_summary is empty
         # This handles cases where the web form puts detailed facts in summary instead of documents
-        import logging
-        import re
-        logger = logging.getLogger("themis.agents.lda")
-        logger.info(f"Checking fact_pattern_summary: has {len(facts_payload.get('fact_pattern_summary', []))} facts")
+        logger.debug(f"Checking fact_pattern_summary: has {len(facts_payload.get('fact_pattern_summary', []))} facts")
 
         if not facts_payload.get("fact_pattern_summary") or len(facts_payload.get("fact_pattern_summary", [])) <= 1:
             summary = matter.get("summary", "")
-            logger.info(f"Extracting facts from matter.summary (length: {len(summary)} chars)")
-            if summary and len(summary) > 50:  # Only process if substantial summary exists
+            logger.debug(f"Extracting facts from matter.summary (length: {len(summary)} chars)")
+            if summary and len(summary) > MIN_SUMMARY_LENGTH:
                 # Split summary into sentences and extract as individual facts
                 # Note: Router sanitizer may have replaced newlines with spaces, so split on periods primarily
                 sentences = re.split(r'(?<=[.!?])\s+', summary)
@@ -265,13 +272,13 @@ Then provide your complete factual analysis."""
                 for sentence in sentences:
                     sentence = sentence.strip()
                     # Skip very short sentences, header-like text, and empty strings
-                    if sentence and len(sentence) >= 15 and not sentence.endswith(':'):
+                    if sentence and len(sentence) >= MIN_SENTENCE_LENGTH and not sentence.endswith(':'):
                         extracted_facts.append(sentence)
 
                 # Only use extracted facts if we got meaningful results
-                if extracted_facts and len(extracted_facts) >= 3:
+                if extracted_facts and len(extracted_facts) >= MIN_EXTRACTED_FACTS:
                     facts_payload["fact_pattern_summary"] = extracted_facts
-                    logger.info(f"✓ Extracted {len(extracted_facts)} facts from matter.summary")
+                    logger.debug(f"Extracted {len(extracted_facts)} facts from matter.summary")
                 else:
                     logger.warning(f"Only extracted {len(extracted_facts)} facts, not enough for meaningful analysis")
             else:
@@ -565,7 +572,7 @@ Return as JSON with structure:
                     pass
 
         duration = 0
-        if len(valid_dates) >= 2:
+        if len(valid_dates) >= MIN_DATES_FOR_TIMELINE:
             valid_dates.sort()
             duration = (valid_dates[-1] - valid_dates[0]).days
 

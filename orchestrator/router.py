@@ -194,20 +194,15 @@ async def execute(
 
         result = await service.execute(plan_id=execute_request.plan_id, matter=validated_matter)
 
-        # DEBUG: Log the final API response structure
+        # Log DDA response structure for debugging
         if 'artifacts' in result and 'dda' in result['artifacts']:
-            logger.info("=== API ROUTER: Final response for DDA ===")
             dda_artifact = result['artifacts']['dda']
-            logger.info(f"DDA artifact type: {type(dda_artifact)}")
-            logger.info(f"DDA artifact keys: {list(dda_artifact.keys()) if isinstance(dda_artifact, dict) else 'NOT A DICT'}")
             if isinstance(dda_artifact, dict) and 'document' in dda_artifact:
-                logger.info(f"Document keys: {list(dda_artifact['document'].keys())}")
-                if 'full_text' in dda_artifact['document']:
-                    logger.info(f"✓ full_text present: {len(dda_artifact['document']['full_text'])} chars")
+                doc = dda_artifact['document']
+                if 'full_text' in doc:
+                    logger.debug(f"DDA full_text present: {len(doc['full_text'])} chars")
                 else:
-                    logger.error("✗ NO full_text in document!")
-            else:
-                logger.error("✗ NO document in DDA artifact!")
+                    logger.warning("DDA document missing full_text")
 
         return result
     except ValueError as exc:

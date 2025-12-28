@@ -16,6 +16,7 @@ that operates in two modes:
 from __future__ import annotations
 
 import ast
+import asyncio
 import json
 import logging
 import os
@@ -269,8 +270,6 @@ class LLMClient:
                 - "tool_calls": List of tools called and their results
                 - "reasoning": Claude's reasoning (if extended thinking enabled)
         """
-        import asyncio
-
         if self._stub_mode:
             return await self._generate_with_tools_stub(
                 system_prompt=system_prompt,
@@ -596,9 +595,6 @@ class LLMClient:
         result_text = f"Stub mode analysis based on {len(tools)} available tools.\n\n"
 
         # Extract matter from user_prompt if it's JSON
-        import asyncio
-        import json
-        import re
         matter = {}
         try:
             match = re.search(r'\{[^{}]*"summary"[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', user_prompt, re.DOTALL)
@@ -982,8 +978,6 @@ class LLMClient:
 
     def _stub_document_generator(self, user_prompt: str, system_prompt: str) -> dict[str, Any]:
         """Generate a stub legal document based on prompt analysis."""
-        import re
-
         # Extract document type from prompt - look for explicit "Generate a ... {doc_type}" statements
         # This is more reliable than just keyword matching which can be fooled by examples
         doc_type = "complaint"  # Default

@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from tools.llm_client import get_llm_client
+
+logger = logging.getLogger("themis.orchestrator.document_type_detector")
 
 
 def _format_parties(parties: list) -> str:
@@ -54,8 +57,6 @@ async def determine_document_type(matter: dict[str, Any]) -> str:
     if draft and isinstance(draft, dict):
         lsa_recommendation = draft.get("recommended_document_type")
         if lsa_recommendation:
-            import logging
-            logger = logging.getLogger("themis.orchestrator")
             reasoning = draft.get("document_type_reasoning", "No reasoning provided")
             logger.info(
                 f"Using LSA's strategic document type recommendation: {lsa_recommendation}. "
@@ -170,19 +171,12 @@ Respond in JSON format:
         if doc_type not in valid_types:
             doc_type = "memorandum"
 
-        # Log the decision
-        import logging
-        logger = logging.getLogger("themis.orchestrator")
-        logger.info(
-            f"Document type determined: {doc_type}. Reasoning: {reasoning}"
-        )
+        logger.info(f"Document type determined: {doc_type}. Reasoning: {reasoning}")
 
         return doc_type
 
     except Exception as e:
-        # 5. Fallback to heuristic-based detection
-        import logging
-        logger = logging.getLogger("themis.orchestrator")
+        # Fallback to heuristic-based detection
         logger.warning(f"LLM document type detection failed: {e}. Using heuristics.")
 
         return _heuristic_document_type(matter)
