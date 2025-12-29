@@ -182,9 +182,13 @@ Then provide your complete strategic analysis."""
             # Fallback to constructing from tool calls
             strategy_payload = self._construct_strategy_from_tool_calls(result["tool_calls"], matter)
 
-        # Extract components
+        # Extract components - ensure they're dicts, not strings
         strategy = strategy_payload.get("strategy", {})
+        if isinstance(strategy, str):
+            strategy = {"summary": strategy}
         risks = strategy_payload.get("risk_assessment") or strategy.get("risk_assessment", {})
+        if isinstance(risks, str):
+            risks = {"summary": risks}
 
         # If not in payload, derive from tool calls
         if not strategy or not risks:
@@ -378,10 +382,11 @@ async def _default_strategy_template(matter: dict[str, Any]) -> dict[str, Any]:
     if legal_analysis:
         issues = legal_analysis.get("issues", [])
         if issues:
-            issues_summary = "\n".join(
-                f"  - {issue.get('issue')} (Strength: {issue.get('strength', 'N/A')})"
-                for issue in issues
-            )
+            def format_issue(issue):
+                if isinstance(issue, dict):
+                    return f"  - {issue.get('issue')} (Strength: {issue.get('strength', 'N/A')})"
+                return f"  - {issue}"
+            issues_summary = "\n".join(format_issue(i) for i in issues)
             context_parts.append(f"Legal Issues:\n{issues_summary}")
 
         analysis_text = legal_analysis.get("analysis")
@@ -502,10 +507,11 @@ async def _default_risk_assessor(matter: dict[str, Any], strategy: dict[str, Any
     if legal_analysis:
         issues = legal_analysis.get("issues", [])
         if issues:
-            issues_summary = "\n".join(
-                f"  - {issue.get('issue')} (Strength: {issue.get('strength', 'N/A')})"
-                for issue in issues
-            )
+            def format_issue(issue):
+                if isinstance(issue, dict):
+                    return f"  - {issue.get('issue')} (Strength: {issue.get('strength', 'N/A')})"
+                return f"  - {issue}"
+            issues_summary = "\n".join(format_issue(i) for i in issues)
             context_parts.append(f"Legal Issues:\n{issues_summary}")
 
     # Strategy

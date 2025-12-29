@@ -26,6 +26,39 @@ from tools.llm_client import get_llm_client
 logger = logging.getLogger("themis.agents.dda.tools")
 
 
+# Helper functions for defensive type handling
+def safe_get(obj: Any, key: str, default: Any = None) -> Any:
+    """Safely get a value from an object that might be a dict or string."""
+    if isinstance(obj, dict):
+        return obj.get(key, default)
+    return default
+
+
+def format_issue(issue: Any) -> str:
+    """Format an issue that might be a dict or string."""
+    if isinstance(issue, dict):
+        return f"  - {issue.get('issue', 'Unknown')} (Strength: {issue.get('strength', 'N/A')})"
+    return f"  - {issue}"
+
+
+def format_event(event: Any) -> str:
+    """Format an event that might be a dict or string."""
+    if isinstance(event, dict):
+        return f"  {event.get('date', 'N/A')}: {event.get('description', 'N/A')}"
+    return f"  - {event}"
+
+
+def format_authority(auth: Any, max_len: int = 100) -> str:
+    """Format an authority that might be a dict or string."""
+    if isinstance(auth, dict):
+        citation = auth.get('citation', auth.get('cite', 'N/A'))
+        holding = auth.get('holding', auth.get('summary', 'N/A'))
+        if len(holding) > max_len:
+            holding = holding[:max_len]
+        return f"  - {citation}: {holding}"
+    return f"  - {auth}"
+
+
 def normalise_party_roles(parties: Any) -> dict[str, str]:
     """Map arbitrary party payloads to plaintiff/defendant placeholders."""
 
@@ -122,20 +155,14 @@ async def default_section_generator(
 
         timeline = facts.get("timeline", [])
         if timeline:
-            timeline_summary = "\n".join(
-                f"  {event.get('date', 'N/A')}: {event.get('description', 'N/A')}"
-                for event in timeline[:10]
-            )
+            timeline_summary = "\n".join(format_event(event) for event in timeline[:10])
             context_parts.append(f"Timeline:\n{timeline_summary}")
 
     # Legal analysis
     if legal_analysis:
         issues = legal_analysis.get("issues", [])
         if issues:
-            issues_summary = "\n".join(
-                f"  - {issue.get('issue')} (Strength: {issue.get('strength', 'N/A')})"
-                for issue in issues
-            )
+            issues_summary = "\n".join(format_issue(issue) for issue in issues)
             context_parts.append(f"Legal Issues:\n{issues_summary}")
 
         analysis = legal_analysis.get("analysis")
@@ -144,10 +171,7 @@ async def default_section_generator(
 
         authorities = legal_analysis.get("authorities", [])
         if authorities:
-            auth_summary = "\n".join(
-                f"  - {auth.get('citation', 'N/A')}: {auth.get('holding', 'N/A')[:100]}"
-                for auth in authorities[:5]
-            )
+            auth_summary = "\n".join(format_authority(auth) for auth in authorities[:5])
             context_parts.append(f"Key Authorities:\n{auth_summary}")
 
     # Strategy
@@ -191,6 +215,15 @@ async def default_section_generator(
 - Thoroughly researched with proper citations
 - Clear and accessible
 - Balanced in presenting both sides""",
+
+        "client_letter": """You are an expert legal writer specializing in client communications. Write a professional legal letter that is:
+- Clear, accessible, and free of unnecessary legal jargon
+- Properly addressed to the client with professional salutation and closing
+- Organized with clear headings for each major issue
+- Analytical in applying relevant legal standards to the facts
+- Provides clear recommendations and next steps
+- Maintains appropriate attorney-client relationship tone
+- Does NOT include a statement of facts unless specifically requested""",
     }
 
     system_prompt = system_prompts.get(
@@ -261,9 +294,12 @@ Return the document as a single complete text in the 'full_document' field."""
         facts_text = "\n\n".join(fact_pattern) if fact_pattern else "Facts to be provided."
 
         issues = legal_analysis.get("issues", [])
+        def format_issue_analysis(issue):
+            if isinstance(issue, dict):
+                return f"{issue.get('issue', 'Issue')}: {issue.get('analysis', 'Analysis pending.')}"
+            return str(issue)
         issues_text = "\n\n".join(
-            f"{issue.get('issue')}: {issue.get('analysis', 'Analysis pending.')}"
-            for issue in issues
+            format_issue_analysis(issue) for issue in issues
         ) if issues else "Legal analysis to be provided."
 
         fallback_doc = f"""
@@ -298,7 +334,7 @@ async def default_citation_formatter(
 
     # Build authority list
     authority_list = "\n".join(
-        f"{i+1}. {auth.get('citation', 'N/A')}: {auth.get('holding', 'N/A')[:200]}"
+        f"{i+1}. {format_authority(auth, max_len=200)}"
         for i, auth in enumerate(authorities[:20])  # Limit to 20 authorities
     )
 
@@ -356,25 +392,39 @@ Respond in JSON format:
         # Fallback to basic formatting
         citations = []
         for auth in authorities:
-            citation = auth.get("citation", "Citation not available")
-            citations.append({
-                "full_citation": citation,
-                "short_citation": "Id.",
-                "parenthetical": "",
-                "case_name": auth.get("case_name", ""),
-                "holding": auth.get("holding", ""),
-            })
+            if isinstance(auth, dict):
+                citation = auth.get("citation", auth.get("cite", "Citation not available"))
+                citations.append({
+                    "full_citation": citation,
+                    "short_citation": "Id.",
+                    "parenthetical": "",
+                    "case_name": auth.get("case_name", ""),
+                    "holding": auth.get("holding", auth.get("summary", "")),
+                })
+            else:
+                citations.append({
+                    "full_citation": str(auth),
+                    "short_citation": "Id.",
+                    "parenthetical": "",
+                    "case_name": "",
+                    "holding": "",
+                })
         return {"citations": citations, "formatted_count": len(citations)}
 
 
 async def default_document_composer(
     document_type: str,
     sections: dict[str, Any],
-    citations: dict[str, Any],
     jurisdiction: str,
-    matter: dict[str, Any],
+    citations: dict[str, Any] | None = None,
+    matter: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Assemble complete legal document from sections."""
+    # Handle optional arguments with defaults
+    if citations is None:
+        citations = {}
+    if matter is None:
+        matter = {}
 
     # Document header
     parties = normalise_party_roles(matter.get("parties"))

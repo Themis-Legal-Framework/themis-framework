@@ -1,0 +1,173 @@
+{
+  "matter": {
+    "metadata": {
+      "id": "PI-2024-SPOL-001",
+      "title": "Jamison v. Sunrise Ladder Co., Inc.",
+      "jurisdiction": "Columbia",
+      "cause_of_action": "wrongful_death_products_liability",
+      "phase": "litigation",
+      "venue": "Columbia Court of Appeal"
+    },
+    "summary": "Wrongful death action arising from ladder defect. Bruce Jamison died after falling from a defective Sunrise ladder on March 10, 2024. Critical evidence (rung locks) was destroyed by Advanced Testing, LLC, a third-party laboratory hired by defendant Sunrise, before plaintiff could examine it. Plaintiff seeks to determine remedies for spoliation of evidence.",
+    "parties": [
+      "Valerie Jamison (Plaintiff - Widow of Bruce Jamison)",
+      "Sunrise Ladder Co., Inc. (Defendant - Manufacturer)",
+      "Advanced Testing, LLC (Third Party - Testing laboratory that destroyed evidence)"
+    ],
+    "documents": [
+      {
+        "title": "Deposition of Bruce Jamison (Decedent)",
+        "date": "2024-06-12",
+        "summary": "Decedent's testimony taken before his death. He stated on March 10, 2024, he was climbing his Sunrise ladder when one of the spring-loaded rung locks gave way, causing the ladder to collapse. He specifically stated: 'I saw that the left rung lock wasn't holding right. There was something wrong with the spring or something.'",
+        "facts": [
+          "Ladder purchased from Sunrise retailer in 2023",
+          "Decedent noticed left rung lock malfunctioned",
+          "Ladder collapsed causing fall and injuries",
+          "Decedent observed mechanical failure in rung lock mechanism"
+        ]
+      },
+      {
+        "title": "Sunrise Letter to Advanced Testing",
+        "date": "2024-06-15",
+        "summary": "Letter from Sunrise General Counsel Robert Hayward instructing Advanced Testing to conduct 'non-destructive testing only' on the ladder and preserve all components.",
+        "facts": [
+          "Sunrise explicitly requested non-destructive testing",
+          "Letter instructed preservation of all components",
+          "Sunrise was aware of potential litigation"
+        ]
+      },
+      {
+        "title": "Advanced Testing Internal Memorandum",
+        "date": "2024-06-18",
+        "summary": "Internal memo from Advanced Testing director Mark Paulson stating the rung locks were corroded and required 'stress testing to failure.' Memo notes: 'Testing will destroy the components but will provide definitive data on manufacturing defect.'",
+        "facts": [
+          "Advanced Testing knew testing would destroy components",
+          "Director authorized destructive testing despite Sunrise instructions",
+          "Components were destroyed during stress testing",
+          "Testing was allegedly to determine manufacturing defect"
+        ]
+      },
+      {
+        "title": "Letter from Plaintiff's Counsel to Sunrise",
+        "date": "2024-06-20",
+        "summary": "Demand from Jamison's counsel requesting preservation of all physical evidence, specifically the ladder and all components including rung locks.",
+        "facts": [
+          "Plaintiff formally demanded evidence preservation",
+          "Request specifically mentioned rung locks",
+          "Sent before Advanced Testing completed destructive testing"
+        ]
+      },
+      {
+        "title": "Response from Sunrise Counsel",
+        "date": "2024-06-22",
+        "summary": "Sunrise counsel responded stating the ladder was with Advanced Testing for examination and all evidence was being preserved.",
+        "facts": [
+          "Sunrise represented evidence was being preserved",
+          "Failed to disclose ongoing destructive testing",
+          "Misrepresentation to opposing counsel"
+        ]
+      },
+      {
+        "title": "Advanced Testing Report",
+        "date": "2024-07-01",
+        "summary": "Final report from Advanced Testing. States rung locks were destroyed during 'comprehensive stress analysis.' Report concludes components showed 'significant corrosion' but cannot determine if defect was manufacturing-related because components no longer exist.",
+        "facts": [
+          "Rung locks completely destroyed during testing",
+          "Cannot make definitive determination on manufacturing defect",
+          "Evidence that could prove or disprove plaintiff's theory is gone",
+          "Testing methodology was destructive contrary to instructions"
+        ]
+      },
+      {
+        "title": "Plaintiff's Expert Declaration",
+        "date": "2024-08-15",
+        "summary": "Declaration from plaintiff's metallurgical expert stating that without examining the actual rung locks, she cannot definitively opine on whether the failure was due to manufacturing defect, design defect, or user error.",
+        "facts": [
+          "Expert cannot form definitive opinion without physical evidence",
+          "Plaintiff prejudiced by loss of evidence",
+          "Other ladder components insufficient to prove manufacturing defect theory"
+        ]
+      }
+    ],
+    "events": [
+      {"date": "2024-03-10", "description": "Bruce Jamison falls from Sunrise ladder due to rung lock failure"},
+      {"date": "2024-06-01", "description": "Plaintiff files wrongful death complaint against Sunrise"},
+      {"date": "2024-06-12", "description": "Deposition of Bruce Jamison taken"},
+      {"date": "2024-06-15", "description": "Sunrise sends ladder to Advanced Testing with preservation instructions"},
+      {"date": "2024-06-18", "description": "Advanced Testing decides to conduct destructive testing"},
+      {"date": "2024-06-20", "description": "Plaintiff's counsel demands preservation of evidence"},
+      {"date": "2024-06-22", "description": "Sunrise counsel misrepresents that evidence is being preserved"},
+      {"date": "2024-06-25", "description": "Advanced Testing destroys rung locks during stress testing"},
+      {"date": "2024-07-01", "description": "Advanced Testing delivers report; destruction of evidence disclosed"},
+      {"date": "2024-09-15", "description": "Bruce Jamison dies from injuries sustained in fall"}
+    ],
+    "issues": [
+      {
+        "issue": "Spoliation Sanctions Against Sunrise: Can Mrs. Jamison obtain sanctions, including possible default judgment, against Sunrise for the destruction of evidence by Advanced Testing?",
+        "facts": [
+          "Sunrise had duty to preserve evidence once litigation was anticipated",
+          "Sunrise sent ladder to third party for testing",
+          "Third party destroyed critical evidence",
+          "Plaintiff demands adverse inference or default judgment",
+          "Apply Brown v. Waldrop factors for sanctions analysis"
+        ]
+      },
+      {
+        "issue": "Independent Tort Action Against Advanced Testing: Can Mrs. Jamison bring an independent tort action against Advanced Testing for spoliation of evidence?",
+        "facts": [
+          "Advanced Testing is not a party to the underlying lawsuit",
+          "Advanced Testing intentionally destroyed evidence despite contrary instructions",
+          "Destruction of evidence prejudices plaintiff's ability to prove case",
+          "Advanced Testing knew of pending litigation",
+          "Apply Zubul v. Standard Motors elements for independent tort analysis"
+        ]
+      }
+    ],
+    "authorities": [
+      {
+        "cite": "Brown v. Waldrop (Columbia Court of Appeal, 2020)",
+        "summary": "Sanctions for spoliation appropriate where party fails to preserve evidence after duty to preserve attaches. Duty arises when litigation is reasonably anticipated. Party responsible for destruction by agents acting on their behalf. Sanctions include adverse inference, issue preclusion, or dismissal. Court considers prejudice to opposing party."
+      },
+      {
+        "cite": "Zubul v. Standard Motors (Columbia Supreme Court, 2018)",
+        "summary": "Independent tort action for intentional spoliation lies against third party who destroys evidence with knowledge of pending litigation. Elements: (1) existence of potential lawsuit; (2) defendant's knowledge of potential lawsuit; (3) intentional destruction of evidence; (4) causal connection between destruction and inability to prove underlying claim; (5) damages. Destruction must be intentional not negligent."
+      }
+    ],
+    "goals": {
+      "remedy": "Advise client on remedies available for spoliation of evidence and determine whether to pursue sanctions against Sunrise or separate action against Advanced Testing",
+      "ideal": "Obtain both sanctions against Sunrise and independent tort recovery against Advanced Testing",
+      "minimum": "Secure adverse inference instruction or other meaningful sanction against Sunrise"
+    },
+    "output_format": {
+      "document_type": "client_letter",
+      "addressee": "Mrs. Valerie Jamison",
+      "from": "Senior Partner",
+      "structure": [
+        "Introduction acknowledging client's case and purpose of letter",
+        "Analysis of Question 1: Sanctions against Sunrise for spoliation",
+        "Analysis of Question 2: Independent tort action against Advanced Testing",
+        "Conclusion with recommendations"
+      ],
+      "requirements": [
+        "Apply Brown v. Waldrop factors to sanctions analysis",
+        "Apply Zubul v. Standard Motors elements to independent tort analysis",
+        "Use heading for each major issue",
+        "Professional legal letter format",
+        "Do not include statement of facts"
+      ]
+    },
+    "strengths": [
+      "Clear evidence of litigation being anticipated when destruction occurred",
+      "Sunrise explicitly instructed non-destructive testing",
+      "Advanced Testing knowingly destroyed evidence",
+      "Plaintiff clearly prejudiced by loss of evidence",
+      "Both cases in Library support plaintiff's position"
+    ],
+    "weaknesses": [
+      "Sunrise did instruct preservation - may argue lack of intent",
+      "Advanced Testing may claim good faith belief testing was necessary",
+      "Causation between destruction and inability to prove claim may be disputed"
+    ],
+    "confidence_score": 75
+  }
+}

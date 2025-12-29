@@ -195,9 +195,17 @@ Then provide your complete legal analysis."""
 
         # Track unresolved issues
         unresolved: list[str] = []
-        if len(spotted_issues) == 1 and spotted_issues[0].get("issue") == "Legal analysis required":
+        first_issue = spotted_issues[0] if spotted_issues else {}
+        first_cite = citations[0] if citations else {}
+        if len(spotted_issues) == 1 and (
+            (isinstance(first_issue, dict) and first_issue.get("issue") == "Legal analysis required") or
+            first_issue == "Legal analysis required"
+        ):
             unresolved.append("No legal issues identified from the fact pattern.")
-        if len(citations) == 1 and citations[0].get("cite") == "Further research required":
+        if len(citations) == 1 and (
+            (isinstance(first_cite, dict) and first_cite.get("cite") == "Further research required") or
+            first_cite == "Further research required"
+        ):
             unresolved.append("Unable to locate supporting authorities for the issues raised.")
         if not contrary_auths:
             unresolved.append("No contrary authority identified - consider researching opposing arguments.")
@@ -415,17 +423,26 @@ async def _synthesise_analysis(
 
     llm = get_llm_client()
 
-    # Build context
+    # Build context with defensive type handling
+    def format_issue_for_analysis(i: int, issue: Any) -> str:
+        if isinstance(issue, dict):
+            return (f"- {i+1}. {issue.get('issue', 'Unknown')} "
+                    f"(Area: {issue.get('area_of_law', 'N/A')}, Strength: {issue.get('strength', 'N/A')})")
+        return f"- {i+1}. {issue}"
+
     issues_text = "\n".join(
-        f"- {i+1}. {issue.get('issue')} (Area: {issue.get('area_of_law', 'N/A')}, "
-        f"Strength: {issue.get('strength', 'N/A')})"
-        for i, issue in enumerate(issues)
+        format_issue_for_analysis(i, issue) for i, issue in enumerate(issues)
     )
 
+    def format_cite_for_analysis(cite: Any) -> str | None:
+        if isinstance(cite, dict) and cite.get("cite"):
+            return f"- {cite.get('cite')}: {cite.get('summary', 'No summary')}"
+        elif isinstance(cite, str):
+            return f"- {cite}"
+        return None
+
     citations_text = "\n".join(
-        f"- {cite.get('cite')}: {cite.get('summary', 'No summary')}"
-        for cite in citations
-        if cite.get("cite")
+        c for c in (format_cite_for_analysis(cite) for cite in citations) if c
     )
 
     system_prompt = """You are a legal expert writing doctrinal analysis. Your job is to:

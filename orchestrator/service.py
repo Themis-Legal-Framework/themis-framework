@@ -244,17 +244,25 @@ class OrchestratorService:
                 if resolved_connectors:
                     agent_input.setdefault("connectors", {}).update(resolved_connectors)
 
-                # Auto-detect document type before DDA runs
-                if (
-                    agent_name == "dda"
-                    and "document_type" not in agent_input
-                    and "document_type" not in agent_input.get("metadata", {})
-                ):
-                    logger.debug("Auto-detecting document type for DDA agent")
-                    detected_type = await determine_document_type(agent_input)
-                    logger.debug(f"Document type detected: {detected_type}")
-                    agent_input["document_type"] = detected_type
-                    agent_input.setdefault("metadata", {})["document_type"] = detected_type
+                # Determine document type before DDA runs
+                # Priority: output_format.document_type > document_type > metadata.document_type > auto-detect
+                if agent_name == "dda":
+                    output_format = agent_input.get("output_format", {})
+                    doc_type = (
+                        output_format.get("document_type")
+                        or agent_input.get("document_type")
+                        or agent_input.get("metadata", {}).get("document_type")
+                    )
+                    if doc_type:
+                        logger.debug(f"Using specified document type: {doc_type}")
+                        agent_input["document_type"] = doc_type
+                        agent_input.setdefault("metadata", {})["document_type"] = doc_type
+                    else:
+                        logger.debug("Auto-detecting document type for DDA agent")
+                        detected_type = await determine_document_type(agent_input)
+                        logger.debug(f"Document type detected: {detected_type}")
+                        agent_input["document_type"] = detected_type
+                        agent_input.setdefault("metadata", {})["document_type"] = detected_type
 
                 # Execute agent with retry policy
                 retry_result: RetryResult = await retry_async(

@@ -3,12 +3,12 @@
 Centralizes magic numbers and configuration values for easier maintenance.
 """
 
-# LLM Token Limits
-MAX_TOKENS_DOCUMENT_GENERATION = 8000
-MAX_TOKENS_ANALYSIS = 4096
-MAX_TOKENS_STRATEGY = 3000
-MAX_TOKENS_SYNTHESIS = 2000
-MAX_TOKENS_TONE_ANALYSIS = 1000
+# LLM Token Limits (increased for complex legal analysis)
+MAX_TOKENS_DOCUMENT_GENERATION = 16000
+MAX_TOKENS_ANALYSIS = 8192
+MAX_TOKENS_STRATEGY = 8192
+MAX_TOKENS_SYNTHESIS = 4096
+MAX_TOKENS_TONE_ANALYSIS = 2000
 
 # Text Processing Thresholds
 MIN_SUMMARY_LENGTH = 50  # Minimum chars for a summary to be useful

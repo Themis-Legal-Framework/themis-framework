@@ -345,11 +345,21 @@ Then provide your complete factual analysis."""
         return facts
 
 
-async def _default_document_parser(matter: dict[str, Any]) -> list[dict[str, Any]]:
+async def _default_document_parser(matter: dict[str, Any] | str) -> list[dict[str, Any]]:
     """Extract document summaries and key facts using LLM.
 
     This is now a properly async function that can be awaited.
     """
+    # Handle case where matter is passed as a string (from LLM tool call)
+    if isinstance(matter, str):
+        try:
+            matter = json.loads(matter)
+        except json.JSONDecodeError:
+            return [{"document": "Input", "summary": matter, "key_facts": [], "dates": [], "parties": []}]
+
+    if not isinstance(matter, dict):
+        return []
+
     documents: Iterable[dict[str, Any]] = matter.get("documents", [])
     parsed: list[dict[str, Any]] = []
 

@@ -36,7 +36,7 @@ logger = logging.getLogger("themis.llm_client")
 
 
 # Default to Claude Opus 4.5 - the latest and most capable reasoning model
-DEFAULT_MODEL = "claude-opus-4-5-20251101"
+DEFAULT_MODEL = "claude-sonnet-4-20250514"
 
 
 class LLMClient:
@@ -53,8 +53,8 @@ class LLMClient:
         self,
         api_key: str | None = None,
         model: str | None = None,
-        use_extended_thinking: bool = True,  # Enabled by default for deeper reasoning
-        use_prompt_caching: bool = True,     # Enabled by default for cost/latency optimization
+        use_extended_thinking: bool = True,   # Enable extended thinking for better reasoning
+        use_prompt_caching: bool = True,      # Enable prompt caching for cost optimization
         enable_code_execution: bool = False,
     ):
         """Initialise the client.
@@ -75,7 +75,11 @@ class LLMClient:
         self.use_prompt_caching = use_prompt_caching
         self.enable_code_execution = enable_code_execution
         self._stub_mode = not self.api_key
-        self.client = None if self._stub_mode else Anthropic(api_key=self.api_key)
+        # Configure client with reasonable timeout (120s for complex reasoning)
+        self.client = None if self._stub_mode else Anthropic(
+            api_key=self.api_key,
+            timeout=120.0,  # 2 minute timeout per request
+        )
         self._stub_handler = StubLLMHandler() if self._stub_mode else None
 
     @retry(
@@ -115,9 +119,14 @@ class LLMClient:
             "messages": messages,
         }
 
-        # Configure extended thinking
+        # Configure extended thinking with correct API format
         if self.use_extended_thinking:
-            request_params["extended_thinking"] = True
+            # Budget must be at least 1024, and counts towards max_tokens
+            thinking_budget = min(max_tokens // 2, 8192)  # Use up to half of max_tokens
+            request_params["thinking"] = {
+                "type": "enabled",
+                "budget_tokens": max(1024, thinking_budget)
+            }
 
         # Configure prompt caching for system prompts
         if self.use_prompt_caching:
@@ -128,15 +137,8 @@ class LLMClient:
                     "cache_control": {"type": "ephemeral"},
                 }
             ]
-            request_params["extra_headers"] = {"anthropic-cache-control": "ephemeral+extended"}
         else:
             request_params["system"] = system_prompt
-
-        # Add beta headers for extended thinking with interleaved mode
-        if self.use_extended_thinking:
-            if "extra_headers" not in request_params:
-                request_params["extra_headers"] = {}
-            request_params["extra_headers"]["anthropic-beta"] = "interleaved-thinking-2025-05-14"
 
         # Configure code execution tool
         if self.enable_code_execution:
@@ -173,7 +175,7 @@ class LLMClient:
         system_prompt: str,
         user_prompt: str,
         response_format: dict[str, Any] | None = None,
-        max_tokens: int = 4096,
+        max_tokens: int = 16384,
     ) -> dict[str, Any]:
         """Generate a structured JSON response from the LLM.
 
@@ -212,7 +214,7 @@ class LLMClient:
         self,
         system_prompt: str,
         user_prompt: str,
-        max_tokens: int = 4096,
+        max_tokens: int = 16384,
     ) -> AsyncIterator[str]:
         """Stream text response from the LLM token by token.
 
@@ -266,7 +268,7 @@ class LLMClient:
         self,
         system_prompt: str,
         user_prompt: str,
-        max_tokens: int = 4096,
+        max_tokens: int = 16384,
         file_ids: list[str] | None = None,
     ) -> str:
         """Generate a plain-text response from the LLM.
@@ -295,7 +297,7 @@ class LLMClient:
         user_prompt: str,
         tools: list[dict[str, Any]],
         tool_functions: dict[str, Any],
-        max_tokens: int = 4096,
+        max_tokens: int = 16384,
         max_tool_rounds: int = 10,
     ) -> dict[str, Any]:
         """Generate a response with autonomous tool use.
@@ -343,18 +345,36 @@ class LLMClient:
 
         while rounds < max_tool_rounds:
             rounds += 1
+            print(f"[LLM] Tool use round {rounds}/{max_tool_rounds}", flush=True)
             logger.info(f"Tool use round {rounds}/{max_tool_rounds}")
 
             # Call Claude with available tools
             request_params: dict[str, Any] = {
                 "model": self.model,
                 "max_tokens": max_tokens,
-                "system": system_prompt,
                 "messages": messages,
                 "tools": tools,
             }
 
+            # Configure prompt caching for system prompts
+            if self.use_prompt_caching:
+                request_params["system"] = [
+                    {"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}
+                ]
+            else:
+                request_params["system"] = system_prompt
+
+            # Configure extended thinking for tool use
+            if self.use_extended_thinking:
+                thinking_budget = min(max_tokens // 2, 8192)
+                request_params["thinking"] = {
+                    "type": "enabled",
+                    "budget_tokens": max(1024, thinking_budget)
+                }
+
+            print(f"[LLM] Calling API with model={self.model}, max_tokens={max_tokens}", flush=True)
             response = self.client.messages.create(**request_params)
+            print(f"[LLM] API response received, stop_reason={response.stop_reason}", flush=True)
 
             # Check if Claude wants to use tools
             if response.stop_reason == "tool_use":
@@ -430,9 +450,28 @@ class LLMClient:
                     "tool_calls": tool_calls,
                     "rounds": rounds
                 }
+            elif response.stop_reason == "max_tokens":
+                # Hit token limit - extract what we have and return
+                logger.warning("Hit max_tokens limit - returning partial response")
+                text_blocks = [block.text for block in response.content if hasattr(block, 'type') and block.type == "text"]
+                final_response = "\n".join(text_blocks) if text_blocks else "Response truncated due to token limit"
+
+                return {
+                    "result": final_response,
+                    "tool_calls": tool_calls,
+                    "rounds": rounds,
+                    "truncated": True
+                }
             else:
-                # Unexpected stop reason
+                # Unexpected stop reason - log but continue with what we have
                 logger.warning(f"Unexpected stop_reason: {response.stop_reason}")
+                text_blocks = [block.text for block in response.content if hasattr(block, 'type') and block.type == "text"]
+                if text_blocks:
+                    return {
+                        "result": "\n".join(text_blocks),
+                        "tool_calls": tool_calls,
+                        "rounds": rounds
+                    }
                 break
 
         # Max rounds reached or unexpected termination
@@ -503,7 +542,7 @@ class LLMClient:
         system_prompt: str,
         user_prompt: str,
         mcp_servers: list[dict[str, str]],
-        max_tokens: int = 4096,
+        max_tokens: int = 16384,
     ) -> str:
         """Generate a response with MCP server integration.
 

@@ -108,9 +108,20 @@ class DocumentDraftingAgent(BaseAgent):
         else:
             logger.debug("DDA does not have facts in matter")
 
-        # Determine document type from matter - user should specify what they need
-        document_type = matter.get("document_type") or matter.get("metadata", {}).get("document_type", "memorandum")
+        # Determine document type from matter - check multiple locations
+        output_format = matter.get("output_format", {})
+        document_type = (
+            matter.get("document_type")
+            or output_format.get("document_type")
+            or matter.get("metadata", {}).get("document_type", "memorandum")
+        )
         jurisdiction = matter.get("jurisdiction") or matter.get("metadata", {}).get("jurisdiction", "federal")
+
+        # Extract additional output format requirements if present
+        addressee = output_format.get("addressee")
+        from_line = output_format.get("from")
+        structure = output_format.get("structure", [])
+        requirements = output_format.get("requirements", [])
 
         # Define available tools in Anthropic format
         tools = [
@@ -213,11 +224,24 @@ After using tools, provide your final analysis as a JSON object with these field
 
 Be professional, precise, and produce court-ready documents."""
 
+        # Build output format instructions if present
+        format_instructions = ""
+        if addressee:
+            format_instructions += f"\n- Address the document to: {addressee}"
+        if from_line:
+            format_instructions += f"\n- From: {from_line}"
+        if structure:
+            format_instructions += f"\n- Required structure: {', '.join(structure)}"
+        if requirements:
+            format_instructions += f"\n- Specific requirements: {'; '.join(requirements)}"
+
         user_prompt = f"""Generate a complete, professional {document_type} for {jurisdiction} jurisdiction.
 
 MATTER DATA:
 {json.dumps(matter, indent=2)}
-
+{f'''
+OUTPUT FORMAT REQUIREMENTS:{format_instructions}
+''' if format_instructions else ''}
 Use the available tools to:
 1. Generate all necessary document sections
 2. Format citations appropriately
